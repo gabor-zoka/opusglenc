@@ -31,7 +31,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "share/compat.h"
+#include <inttypes.h>
 #include "FLAC/stream_decoder.h"
 
 static FLAC__StreamDecoderWriteStatus write_callback(const FLAC__StreamDecoder *decoder, const FLAC__Frame *frame, const FLAC__int32 * const buffer[], void *client_data);
