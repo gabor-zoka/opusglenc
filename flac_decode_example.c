@@ -1,38 +1,7 @@
-/* example_c_decode_file - Simple FLAC file decoder using libFLAC
- * Copyright (C) 2007-2009  Josh Coalson
- * Copyright (C) 2011-2016  Xiph.Org Foundation
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
-
-/*
- * This example shows how to use libFLAC to decode a FLAC file to a WAVE
- * file.  It only supports 16-bit stereo files.
- *
- * Complete API documentation can be found at:
- *   http://xiph.org/flac/api/
- */
-
-#ifdef HAVE_CONFIG_H
-#  include <config.h>
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
-#include "FLAC/stream_decoder.h"
+#include <FLAC/stream_decoder.h>
 
 static FLAC__StreamDecoderWriteStatus write_callback(const FLAC__StreamDecoder *decoder, const FLAC__Frame *frame, const FLAC__int32 * const buffer[], void *client_data);
 static void metadata_callback(const FLAC__StreamDecoder *decoder, const FLAC__StreamMetadata *metadata, void *client_data);
