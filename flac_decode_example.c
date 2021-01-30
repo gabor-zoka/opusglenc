@@ -58,7 +58,7 @@ write_cb(const FLAC__StreamDecoder* dec,
     float* o = cli->enc_buffer + c;
     const FLAC__int32* const iend = buffer[c] + frame->header.blocksize;
     for(const FLAC__int32* i = buffer[c]; i != iend; ++i) {
-      *o = (float)*i / INT32_MAX;
+      *o = (FLAC__int16)*i / (float)INT16_MAX;
       o += channels;
     }
   }
@@ -114,6 +114,8 @@ int main(int argc, char *argv[])
 	FLAC__stream_decoder_set_md5_checking(dec, true);
 
   struct Client client;
+  client.out_path = argv[2];
+
   FLAC__StreamDecoderInitStatus	init_status =
   FLAC__stream_decoder_init_file(dec, argv[1], write_cb, meta_cb, error_cb, &client);
 	if(init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
