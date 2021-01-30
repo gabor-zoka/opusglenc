@@ -77,12 +77,23 @@ meta_cb(const FLAC__StreamDecoder*  dec,
 	(void)dec;
   struct Client* cli = (struct Client*)client;
 
-	if(meta->type == FLAC__METADATA_TYPE_STREAMINFO) {
+	if (meta->type == FLAC__METADATA_TYPE_STREAMINFO) {
     cli->sample_rate   = meta->data.stream_info.sample_rate;
     cli->channels      = meta->data.stream_info.channels;
     cli->max_blocksize = meta->data.stream_info.max_blocksize;
     cli->comments      = ope_comments_create();
 	}
+  else if (meta->type == FLAC__METADATA_TYPE_VORBIS_COMMENT) {
+    FLAC__StreamMetadata_VorbisComment_Entry* entry     = meta->data.vorbis_comment.comments;
+    FLAC__StreamMetadata_VorbisComment_Entry* entry_end = meta->data.vorbis_comment.comments +
+      meta->data.vorbis_comment.num_comments;
+
+    while (entry != entry_end) {
+      ope_comments_add_string(cli->comments, entry->entry);
+
+      ++entry;
+    }
+  }
 }
 
 
@@ -111,7 +122,8 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	FLAC__stream_decoder_set_md5_checking(dec, true);
+  FLAC__stream_decoder_set_md5_checking(dec, true);
+  FLAC__stream_decoder_set_metadata_respond(dec, FLAC__METADATA_TYPE_VORBIS_COMMENT);
 
   struct Client client;
   client.out_path = argv[2];
