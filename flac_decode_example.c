@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h> /* PRIu64 */
+#include <math.h>
 
 #include <FLAC/stream_decoder.h>
 #include <opusenc.h>
@@ -14,6 +15,7 @@ struct Client {
   /* internal params */
   unsigned         sample_rate;
   unsigned         channels;
+  float            scale;
   unsigned         max_blocksize;
   OggOpusComments* comments;
   OggOpusEnc*      enc;
@@ -53,12 +55,13 @@ write_cb(const FLAC__StreamDecoder* dec,
     }
   }
 
+  float scale = cli->scale;
   unsigned channels = cli->channels;
   for(unsigned c = 0; c != channels; ++c) {
     float* o = cli->enc_buffer + c;
     const FLAC__int32* const iend = buffer[c] + frame->header.blocksize;
     for(const FLAC__int32* i = buffer[c]; i != iend; ++i) {
-      *o = (FLAC__int16)*i / (float)INT16_MAX;
+      *o = scale * *i;
       o += channels;
     }
   }
@@ -78,10 +81,11 @@ meta_cb(const FLAC__StreamDecoder*  dec,
   struct Client* cli = (struct Client*)client;
 
 	if (meta->type == FLAC__METADATA_TYPE_STREAMINFO) {
-    cli->sample_rate   = meta->data.stream_info.sample_rate;
-    cli->channels      = meta->data.stream_info.channels;
-    cli->max_blocksize = meta->data.stream_info.max_blocksize;
-    cli->comments      = ope_comments_create();
+    cli->sample_rate     = meta->data.stream_info.sample_rate;
+    cli->channels        = meta->data.stream_info.channels;
+    cli->scale           = exp(-(meta->data.stream_info.bits_per_sample-1.0)*log(2.0));
+    cli->max_blocksize   = meta->data.stream_info.max_blocksize;
+    cli->comments        = ope_comments_create();
 	}
   else if (meta->type == FLAC__METADATA_TYPE_VORBIS_COMMENT) {
     FLAC__StreamMetadata_VorbisComment_Entry* entry     = meta->data.vorbis_comment.comments;
