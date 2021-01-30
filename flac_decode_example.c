@@ -58,11 +58,15 @@ write_cb(const FLAC__StreamDecoder* dec,
   float scale = cli->scale;
   unsigned channels = cli->channels;
   for(unsigned c = 0; c != channels; ++c) {
-    float* o = cli->enc_buffer + c;
+    float*                   o    = cli->enc_buffer + c;
+    const FLAC__int32*       i    = buffer[c];
     const FLAC__int32* const iend = buffer[c] + frame->header.blocksize;
-    for(const FLAC__int32* i = buffer[c]; i != iend; ++i) {
+
+    while(i != iend) {
       *o = scale * *i;
+
       o += channels;
+      i += 1;
     }
   }
 
