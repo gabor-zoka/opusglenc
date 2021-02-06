@@ -36,15 +36,15 @@ typedef struct {
 
 void
 config_enc(OggOpusEnc* const enc, const Client* const cli) {
-  assert(ope_encoder_ctl(enc, OPUS_SET_EXPERT_FRAME_DURATION(OPUS_FRAMESIZE_20_MS))        != OPE_OK ||
-         ope_encoder_ctl(enc, OPE_SET_MUXING_DELAY(48000))                                 != OPE_OK ||
-         ope_encoder_ctl(enc, OPE_SET_COMMENT_PADDING(8192))                               != OPE_OK ||
-         ope_encoder_ctl(enc, OPUS_SET_VBR(1))                                             != OPE_OK ||
-         ope_encoder_ctl(enc, OPUS_SET_VBR_CONSTRAINT(0))                                  != OPE_OK ||
-         ope_encoder_ctl(enc, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC))                          != OPE_OK ||
-         ope_encoder_ctl(enc, OPUS_SET_COMPLEXITY(10))                                     != OPE_OK ||
-         ope_encoder_ctl(enc, OPUS_SET_PACKET_LOSS_PERC(0))                                != OPE_OK ||
-         ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, cli->bits_per_sample)))) != OPE_OK ||
+  assert(ope_encoder_ctl(enc, OPUS_SET_EXPERT_FRAME_DURATION(OPUS_FRAMESIZE_20_MS))        == OPE_OK &&
+         ope_encoder_ctl(enc, OPE_SET_MUXING_DELAY(48000))                                 == OPE_OK &&
+         ope_encoder_ctl(enc, OPE_SET_COMMENT_PADDING(8192))                               == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_VBR(1))                                             == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_VBR_CONSTRAINT(0))                                  == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC))                          == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_COMPLEXITY(10))                                     == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_PACKET_LOSS_PERC(0))                                == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, cli->bits_per_sample)))) == OPE_OK &&
 
          // We cannot fail on bitrate if it is positive:
          //
@@ -59,7 +59,7 @@ config_enc(OggOpusEnc* const enc, const Client* const cli) {
          //    }
          //    st->bitrate_bps = value;
          // }
-         ope_encoder_ctl(enc, OPUS_SET_BITRATE(cli->bitrate))                              != OPE_OK);
+         ope_encoder_ctl(enc, OPUS_SET_BITRATE(cli->bitrate))                              == OPE_OK);
 }
 
 
