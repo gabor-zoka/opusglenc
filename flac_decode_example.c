@@ -58,6 +58,7 @@ typedef struct {
   OggOpusComments* comments;
   OggOpusEnc*      enc;
   float*           enc_buffer;
+  int              initialized;
 } Client;
 
 
@@ -92,6 +93,27 @@ config_enc(OggOpusEnc* const enc, const Client* const cli) {
 
 
 
+void initialize_enc(Client* const cli) {
+  assert(cli->initialized == 0);
+
+  if (cli->channels > 2)
+    fatal("ERROR: Only mono and stereo are supported\n");
+
+  int err;
+  cli->enc = ope_encoder_create_file(cli->out_path, cli->comments,
+      cli->sample_rate, cli->channels, 0, &err);
+  if (cli->enc == NULL || err != OPE_OK)
+    fatal("ERROR: Encoding to file %s: %s\n", cli->out_path, ope_strerror(err));
+
+  config_enc(cli->enc, cli);
+
+  cli->enc_buffer  = mymalloc(cli->channels * cli->max_blocksize * sizeof(float));
+
+  cli->initialized = 1;
+}
+
+
+
 FLAC__StreamDecoderWriteStatus
 write_cb(const FLAC__StreamDecoder* dec,
          const FLAC__Frame*         frame,
@@ -99,23 +121,10 @@ write_cb(const FLAC__StreamDecoder* dec,
          void*                      client) {
   dec;
   Client* cli = client;
-  int     err;
 
-	/* Set up the encoder before we write the first frame */
-	if (frame->header.number.sample_number == 0) {
-	  if (cli->channels > 2)
-		  fatal("ERROR: Only mono and stereo are supported\n");
-
-    int err;
-    cli->enc = ope_encoder_create_file(cli->out_path, cli->comments,
-        cli->sample_rate, cli->channels, 0, &err);
-    if (cli->enc == NULL || err != OPE_OK)
-      fatal("ERROR: Encoding to file %s: %s\n", cli->out_path, ope_strerror(err));
-
-    config_enc(cli->enc, cli);
-
-    cli->enc_buffer = mymalloc(cli->channels * cli->max_blocksize * sizeof(float));
-  }
+  // Set up the encoder before we write the first frame
+  if (frame->header.number.sample_number == 0)
+    initialize_enc(cli);
 
   float    scale    = cli->scale;
   unsigned channels = cli->channels;
@@ -136,7 +145,8 @@ write_cb(const FLAC__StreamDecoder* dec,
     ++c;
   }
 
-  if ((err = ope_encoder_write_float(cli->enc, cli->enc_buffer, frame->header.blocksize)) != OPE_OK)
+  int err = ope_encoder_write_float(cli->enc, cli->enc_buffer, frame->header.blocksize);
+  if (err != OPE_OK)
     fatal("ERROR: Encoding aborted: %s\n", ope_strerror(err));
 
 	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
@@ -283,9 +293,10 @@ int main(int argc, char *argv[])
   FLAC__stream_decoder_set_metadata_respond(dec, FLAC__METADATA_TYPE_VORBIS_COMMENT);
 
   Client client;
-  client.bitrate  = 192000;
-  client.in_path  = argv[1];
-  client.out_path = argv[2];
+  client.bitrate     = 192000;
+  client.in_path     = argv[1];
+  client.out_path    = argv[2];
+  client.initialized = 0;
 
   FLAC__StreamDecoderInitStatus	init_status =
   FLAC__stream_decoder_init_file(dec, argv[1], write_cb, meta_cb, error_cb, &client);
@@ -295,6 +306,9 @@ int main(int argc, char *argv[])
 	}
 
 	FLAC__bool ok = FLAC__stream_decoder_process_until_end_of_stream(dec);
+  // If the FLAC file is empty, the write_cb() is never called.
+  if (!client.initialized)
+    initialize_enc(&client);
 
 	FLAC__stream_decoder_delete(dec);
   ope_encoder_drain(client.enc);
