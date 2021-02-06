@@ -6,12 +6,40 @@
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
+#include <err.h>
+#include <stdarg.h>
 
 #include <FLAC/stream_decoder.h>
 #include <opusenc.h>
 
 #define IMIN(a,b) ((a) < (b) ? (a) : (b))   /**< Minimum int value.   */
 #define IMAX(a,b) ((a) > (b) ? (a) : (b))   /**< Maximum int value.   */
+
+
+
+static void
+fatal(const char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  vfprintf(stderr, format, ap);
+  va_end(ap);
+  exit(EXIT_FAILURE);
+}
+
+
+
+void*
+mymalloc(size_t size) {
+  // malloc can return NULL if size == 0;
+  assert(size > 0);
+
+  void* ret = malloc(size);
+
+  if (ret == NULL)
+    fatal("ERROR: Out of memory\n");
+
+  return ret;
+}
 
 
 
@@ -71,47 +99,45 @@ write_cb(const FLAC__StreamDecoder* dec,
          void*                      client) {
   dec;
   Client* cli = client;
+  int     err;
 
 	/* Set up the encoder before we write the first frame */
-	if(frame->header.number.sample_number == 0) {
-	  if (cli->channels > 2) {
-		  fprintf(stderr, "ERROR: Only mono and stereo are supported.\n");
-		  return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-	  }
+	if (frame->header.number.sample_number == 0) {
+	  if (cli->channels > 2)
+		  fatal("ERROR: Only mono and stereo are supported\n");
 
-    int error;
+    int err;
     cli->enc = ope_encoder_create_file(cli->out_path, cli->comments,
-        cli->sample_rate, cli->channels, 0, &error);
-    if (!cli->enc) {
-      fprintf(stderr, "ERROR: Encoding to file %s: %s\n", cli->out_path, ope_strerror(error));
-      return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-    }
+        cli->sample_rate, cli->channels, 0, &err);
+    if (cli->enc == NULL || err != OPE_OK)
+      fatal("ERROR: Encoding to file %s: %s\n", cli->out_path, ope_strerror(err));
 
     config_enc(cli->enc, cli);
 
-    cli->enc_buffer = malloc(cli->channels * cli->max_blocksize * sizeof(float));
-    if (!cli->enc_buffer) {
-      fprintf(stderr, "ERROR: Memory allocation");
-      return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-    }
+    cli->enc_buffer = mymalloc(cli->channels * cli->max_blocksize * sizeof(float));
   }
 
-  float scale = cli->scale;
+  float    scale    = cli->scale;
   unsigned channels = cli->channels;
-  for(unsigned c = 0; c != channels; ++c) {
+  unsigned c        = 0;
+
+  while (c != channels) {
     float*                   o    = cli->enc_buffer + c;
     const FLAC__int32*       i    = buffer[c];
     const FLAC__int32* const iend = buffer[c] + frame->header.blocksize;
 
-    while(i != iend) {
+    while (i != iend) {
       *o = scale * *i;
 
       o += channels;
       i += 1;
     }
+
+    ++c;
   }
 
-  ope_encoder_write_float(cli->enc, cli->enc_buffer, frame->header.blocksize);
+  if ((err = ope_encoder_write_float(cli->enc, cli->enc_buffer, frame->header.blocksize)) != OPE_OK)
+    fatal("ERROR: Encoding aborted: %s\n", ope_strerror(err));
 
 	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
@@ -124,16 +150,14 @@ read_gain(const char* const   str,
           const Client* const cli) {
   assert(pmatch.rm_so != -1);
 
-  const regoff_t len      = pmatch.rm_eo - pmatch.rm_so;
-  char* const    gain_str = malloc(len + 1); assert(gain_str != NULL);
+  const regoff_t len      = pmatch.rm_eo - pmatch.rm_so; assert(len >= 0);
+  char* const    gain_str = mymalloc(len + 1);
   memcpy(gain_str, str + pmatch.rm_so, len);
   gain_str[len] = '\0';
 
   double gain = strtod(gain_str, NULL);
-  if (errno) {
-    fprintf(stderr, "ERROR: Parsing %s of %s\n", str, cli->in_path);
-    exit(EXIT_FAILURE);
-  }
+  if (errno)
+    err(EXIT_FAILURE, "ERROR: Parsing %s of %s\n", str, cli->in_path);
 
   free(gain_str);
 
@@ -159,10 +183,10 @@ add_r128_gain_tag(OggOpusComments* const comments,
   // https://github.com/Moonbase59/loudgain/blob/master/src/tag.cc
   const int i   = round(gain * 256.0);
   const int len = snprintf(NULL, 0, "%d", i) + 1;
-  char*     str = malloc(len); assert(str != NULL);
+  char*     str = mymalloc(len);
   snprintf(str, len, "%d", i);
 
-  ope_comments_add(comments, key, str);
+  assert(ope_comments_add(comments, key, str) == OPE_OK);
 
   free(str);
 }
