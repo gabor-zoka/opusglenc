@@ -10,10 +10,14 @@
 #include <FLAC/stream_decoder.h>
 #include <opusenc.h>
 
+#define IMIN(a,b) ((a) < (b) ? (a) : (b))   /**< Minimum int value.   */
+#define IMAX(a,b) ((a) > (b) ? (a) : (b))   /**< Maximum int value.   */
+
 
 
 typedef struct {
   /* input params */
+  opus_int32       bitrate;
   const char*      in_path;
   const char*      out_path;
 
@@ -22,10 +26,41 @@ typedef struct {
   unsigned         channels;
   float            scale;
   unsigned         max_blocksize;
+  unsigned         bits_per_sample;
   OggOpusComments* comments;
   OggOpusEnc*      enc;
   float*           enc_buffer;
 } Client;
+
+
+
+void
+config_enc(OggOpusEnc* const enc, const Client* const cli) {
+  assert(ope_encoder_ctl(enc, OPUS_SET_EXPERT_FRAME_DURATION(OPUS_FRAMESIZE_20_MS))        != OPE_OK ||
+         ope_encoder_ctl(enc, OPE_SET_MUXING_DELAY(48000))                                 != OPE_OK ||
+         ope_encoder_ctl(enc, OPE_SET_COMMENT_PADDING(8192))                               != OPE_OK ||
+         ope_encoder_ctl(enc, OPUS_SET_VBR(1))                                             != OPE_OK ||
+         ope_encoder_ctl(enc, OPUS_SET_VBR_CONSTRAINT(0))                                  != OPE_OK ||
+         ope_encoder_ctl(enc, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC))                          != OPE_OK ||
+         ope_encoder_ctl(enc, OPUS_SET_COMPLEXITY(10))                                     != OPE_OK ||
+         ope_encoder_ctl(enc, OPUS_SET_PACKET_LOSS_PERC(0))                                != OPE_OK ||
+         ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, cli->bits_per_sample)))) != OPE_OK ||
+
+         // We cannot fail on bitrate if it is positive:
+         //
+         // case OPUS_SET_BITRATE_REQUEST:
+         // {
+         //    opus_int32 value = va_arg(ap, opus_int32);
+         //    if (value != OPUS_AUTO && value != OPUS_BITRATE_MAX)
+         //    {
+         //       if (value <= 0)
+         //          goto bad_arg;
+         //       value = IMIN(300000*st->layout.nb_channels, IMAX(500*st->layout.nb_channels, value));
+         //    }
+         //    st->bitrate_bps = value;
+         // }
+         ope_encoder_ctl(enc, OPUS_SET_BITRATE(cli->bitrate))                              != OPE_OK);
+}
 
 
 
@@ -47,11 +82,12 @@ write_cb(const FLAC__StreamDecoder* dec,
     int error;
     cli->enc = ope_encoder_create_file(cli->out_path, cli->comments,
         cli->sample_rate, cli->channels, 0, &error);
-
     if (!cli->enc) {
       fprintf(stderr, "ERROR: Encoding to file %s: %s\n", cli->out_path, ope_strerror(error));
       return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
     }
+
+    config_enc(cli->enc, cli);
 
     cli->enc_buffer = malloc(cli->channels * cli->max_blocksize * sizeof(float));
     if (!cli->enc_buffer) {
@@ -145,6 +181,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
     cli->channels        = meta->data.stream_info.channels;
     cli->scale           = exp(-(meta->data.stream_info.bits_per_sample - 1.0) * M_LN2);
     cli->max_blocksize   = meta->data.stream_info.max_blocksize;
+    cli->bits_per_sample = meta->data.stream_info.bits_per_sample;
     cli->comments        = ope_comments_create();
 	}
   else if (meta->type == FLAC__METADATA_TYPE_VORBIS_COMMENT) {
@@ -222,6 +259,7 @@ int main(int argc, char *argv[])
   FLAC__stream_decoder_set_metadata_respond(dec, FLAC__METADATA_TYPE_VORBIS_COMMENT);
 
   Client client;
+  client.bitrate  = 192000;
   client.in_path  = argv[1];
   client.out_path = argv[2];
 
