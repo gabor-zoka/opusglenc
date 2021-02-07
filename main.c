@@ -23,6 +23,27 @@
 
 
 
+typedef struct {
+  unsigned         max_blocksize;
+  unsigned         sample_rate;
+  unsigned         channels;
+  unsigned         bits_per_sample;
+  FLAC__uint64     total_samples;
+  OggOpusComments* comments;
+  OggOpusEnc*      enc;
+  opus_int32       bitrate;
+  char**           inp_paths;
+  char**           out_paths;
+  size_t           num_paths;
+  float*           enc_buffer;
+
+  unsigned         initialized;
+  size_t           idx;
+  float            scale;
+} Data;
+
+
+
 void
 fatal(const char* format, ...) {
   va_list ap;
@@ -36,12 +57,9 @@ fatal(const char* format, ...) {
 
 void*
 my_malloc(size_t size) {
-  // malloc can return NULL if size == 0;
-  assert(size > 0);
-
   void* ret = malloc(size);
 
-  if (ret == NULL)
+  if (size != 0 && ret == NULL)
     fatal("ERROR: Out of memory\n");
 
   return ret;
@@ -68,37 +86,17 @@ my_sprintf(const char* format, ...) {
 
 
 
-typedef struct {
-  /* input params */
-  opus_int32       bitrate;
-  const char*      in_path;
-  const char*      out_path;
-
-  /* internal params */
-  unsigned         sample_rate;
-  unsigned         channels;
-  float            scale;
-  unsigned         max_blocksize;
-  unsigned         bits_per_sample;
-  OggOpusComments* comments;
-  OggOpusEnc*      enc;
-  float*           enc_buffer;
-  int              initialized;
-} Client;
-
-
-
 void
-config_enc(OggOpusEnc* const enc, const Client* const cli) {
-  assert(ope_encoder_ctl(enc, OPUS_SET_EXPERT_FRAME_DURATION(OPUS_FRAMESIZE_20_MS))        == OPE_OK &&
-         ope_encoder_ctl(enc, OPE_SET_MUXING_DELAY(48000))                                 == OPE_OK &&
-         ope_encoder_ctl(enc, OPE_SET_COMMENT_PADDING(8192))                               == OPE_OK &&
-         ope_encoder_ctl(enc, OPUS_SET_VBR(1))                                             == OPE_OK &&
-         ope_encoder_ctl(enc, OPUS_SET_VBR_CONSTRAINT(0))                                  == OPE_OK &&
-         ope_encoder_ctl(enc, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC))                          == OPE_OK &&
-         ope_encoder_ctl(enc, OPUS_SET_COMPLEXITY(10))                                     == OPE_OK &&
-         ope_encoder_ctl(enc, OPUS_SET_PACKET_LOSS_PERC(0))                                == OPE_OK &&
-         ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, cli->bits_per_sample)))) == OPE_OK &&
+config_enc(OggOpusEnc* const enc, const Data* const d) {
+  assert(ope_encoder_ctl(enc, OPUS_SET_EXPERT_FRAME_DURATION(OPUS_FRAMESIZE_20_MS))      == OPE_OK &&
+         ope_encoder_ctl(enc, OPE_SET_MUXING_DELAY(48000))                               == OPE_OK &&
+         ope_encoder_ctl(enc, OPE_SET_COMMENT_PADDING(8192))                             == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_VBR(1))                                           == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_VBR_CONSTRAINT(0))                                == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC))                        == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_COMPLEXITY(10))                                   == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_PACKET_LOSS_PERC(0))                              == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, d->bits_per_sample)))) == OPE_OK &&
 
          // We cannot fail on bitrate if it is positive:
          //
@@ -113,28 +111,34 @@ config_enc(OggOpusEnc* const enc, const Client* const cli) {
          //    }
          //    st->bitrate_bps = value;
          // }
-         ope_encoder_ctl(enc, OPUS_SET_BITRATE(cli->bitrate))                              == OPE_OK);
+         ope_encoder_ctl(enc, OPUS_SET_BITRATE(d->bitrate)) == OPE_OK);
 }
 
 
 
-void initialize_enc(Client* const cli) {
-  assert(cli->initialized == 0);
-
-  if (cli->channels > 2)
-    fatal("ERROR: Only mono and stereo are supported\n");
+void initialize_enc(Data* const d) {
+  assert(d->initialized == 0);
 
   int err;
-  cli->enc = ope_encoder_create_file(cli->out_path, cli->comments,
-      cli->sample_rate, cli->channels, 0, &err);
-  if (cli->enc == NULL || err != OPE_OK)
-    fatal("ERROR: Encoding to file %s: %s\n", cli->out_path, ope_strerror(err));
 
-  config_enc(cli->enc, cli);
+  if (d->idx == 0) {
+    if (d->channels > 2)
+      fatal("ERROR: Only mono and stereo are supported\n");
 
-  cli->enc_buffer  = my_malloc(cli->channels * cli->max_blocksize * sizeof(float));
+    d->enc = ope_encoder_create_file(d->out_paths[d->idx], d->comments,
+        d->sample_rate, d->channels, 0, &err);
+    if (d->enc == NULL || err != OPE_OK)
+      fatal("ERROR: Encoding to file %s: %s\n", d->out_paths[d->idx], ope_strerror(err));
 
-  cli->initialized = 1;
+    config_enc(d->enc, d);
+  }
+  else {
+    err = ope_encoder_continue_new_file(d->enc, d->out_paths[d->idx], d->comments);
+    if (err != OPE_OK)
+      fatal("ERROR: Encoding to file %s: %s\n", d->out_paths[d->idx], ope_strerror(err));
+  }
+
+  d->initialized = 1;
 }
 
 
@@ -143,19 +147,19 @@ FLAC__StreamDecoderWriteStatus
 write_cb(const FLAC__StreamDecoder* dec,
          const FLAC__Frame*         frame,
          const FLAC__int32* const   buffer[],
-         void*                      client) {
-  Client* cli = client;
+         void*                      data) {
+  Data* d = data;
 
   // Set up the encoder before we write the first frame
   if (frame->header.number.sample_number == 0)
-    initialize_enc(cli);
+    initialize_enc(d);
 
-  float    scale    = cli->scale;
-  unsigned channels = cli->channels;
+  float    scale    = d->scale;
+  unsigned channels = d->channels;
   unsigned c        = 0;
 
   while (c != channels) {
-    float*                   o    = cli->enc_buffer + c;
+    float*                   o    = d->enc_buffer + c;
     const FLAC__int32*       i    = buffer[c];
     const FLAC__int32* const iend = buffer[c] + frame->header.blocksize;
 
@@ -169,7 +173,7 @@ write_cb(const FLAC__StreamDecoder* dec,
     ++c;
   }
 
-  int err = ope_encoder_write_float(cli->enc, cli->enc_buffer, frame->header.blocksize);
+  int err = ope_encoder_write_float(d->enc, d->enc_buffer, frame->header.blocksize);
   if (err != OPE_OK)
     fatal("ERROR: Encoding aborted: %s\n", ope_strerror(err));
 
@@ -181,7 +185,7 @@ write_cb(const FLAC__StreamDecoder* dec,
 double
 read_gain(const char* const   str,
           const regmatch_t    pmatch,
-          const Client* const cli) {
+          const Data* const d) {
   assert(pmatch.rm_so != -1);
 
   const regoff_t len      = pmatch.rm_eo - pmatch.rm_so; assert(len >= 0);
@@ -191,7 +195,7 @@ read_gain(const char* const   str,
 
   double gain = strtod(gain_str, NULL);
   if (errno)
-    err(EXIT_FAILURE, "ERROR: Parsing %s of %s", str, cli->in_path);
+    err(EXIT_FAILURE, "ERROR: Parsing %s of %s", str, d->inp_paths[d->idx]);
 
   free(gain_str);
 
@@ -227,16 +231,15 @@ add_r128_gain_tag(OggOpusComments* const comments,
 void
 meta_cb(const FLAC__StreamDecoder*  dec,
         const FLAC__StreamMetadata* meta,
-        void*                       client) {
-  Client* cli = client;
+        void*                       data) {
+  Data* d = data;
 
 	if (meta->type == FLAC__METADATA_TYPE_STREAMINFO) {
-    cli->sample_rate     = meta->data.stream_info.sample_rate;
-    cli->channels        = meta->data.stream_info.channels;
-    cli->scale           = exp(-(meta->data.stream_info.bits_per_sample - 1.0) * M_LN2);
-    cli->max_blocksize   = meta->data.stream_info.max_blocksize;
-    cli->bits_per_sample = meta->data.stream_info.bits_per_sample;
-    cli->comments        = ope_comments_create();
+    if (d->comments != NULL)
+      ope_comments_destroy(d->comments);
+
+    d->comments = ope_comments_create();
+    d->scale    = exp(-(meta->data.stream_info.bits_per_sample - 1.0) * M_LN2);
 	}
   else if (meta->type == FLAC__METADATA_TYPE_VORBIS_COMMENT) {
     FLAC__StreamMetadata_VorbisComment_Entry* entry     = meta->data.vorbis_comment.comments;
@@ -258,13 +261,13 @@ meta_cb(const FLAC__StreamDecoder*  dec,
 
       if (regexec(&replaygain_re, comment, 2, pmatch, 0)) {
         // Not REPLAYGAIN_*
-        ope_comments_add_string(cli->comments, comment);
+        ope_comments_add_string(d->comments, comment);
       }
       else if (!regexec(&album_gain_re, comment, 2, pmatch, 0)) {
-        album_gain = read_gain(comment, pmatch[1], cli);
+        album_gain = read_gain(comment, pmatch[1], d);
       }
       else if (!regexec(&track_gain_re, comment, 2, pmatch, 0)) {
-        track_gain = read_gain(comment, pmatch[1], cli);
+        track_gain = read_gain(comment, pmatch[1], d);
       }
 
       ++entry;
@@ -273,13 +276,13 @@ meta_cb(const FLAC__StreamDecoder*  dec,
     if (!isnan(album_gain) && album_gain < 20.0) {
       // album_gain uses -18LUFS, but Opus (and me) wants to use -23LUFS as 
       // target loudness.
-      cli->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
+      d->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
 
       if (!isnan(track_gain))
-        add_r128_gain_tag(cli->comments, "R128_TRACK_GAIN", track_gain - album_gain);
+        add_r128_gain_tag(d->comments, "R128_TRACK_GAIN", track_gain - album_gain);
     }
     else if (!isnan(track_gain))
-      add_r128_gain_tag(cli->comments, "R128_TRACK_GAIN", track_gain);
+      add_r128_gain_tag(d->comments, "R128_TRACK_GAIN", track_gain);
   }
 }
 
@@ -288,23 +291,12 @@ meta_cb(const FLAC__StreamDecoder*  dec,
 void
 error_cb(const FLAC__StreamDecoder*     dec,
          FLAC__StreamDecoderErrorStatus status,
-         void*                          client) {
-	fprintf(stderr, "ERROR: %s\n", FLAC__StreamDecoderErrorStatusString[status]);
+         void*                          data) {
+  Data* d = (Data*)data;
+
+	fatal("ERROR: Stream decoding %s: %s\n", d->inp_paths[d->idx],
+      FLAC__StreamDecoderErrorStatusString[status]);
 }
-
-
-
-
-typedef struct {
-  unsigned 	   max_blocksize;
-  unsigned 	   sample_rate;
-  unsigned 	   channels;
-  FLAC__uint64 total_samples;
-
-  size_t       num_paths;
-  char**       inp_paths;
-  char**       out_paths;
-} Data;
 
 
 
@@ -320,6 +312,18 @@ ls_flac(char* const inp_dir, char* const out_dir) {
     inp_dir[pmatch[0].rm_so] = '\0';
   if(!regexec(&slash_re, out_dir, 1, pmatch, 0))
     out_dir[pmatch[0].rm_so] = '\0';
+
+  // Check the out_dir
+
+  struct stat st;
+  if(stat(out_dir, &st))
+    err(EXIT_FAILURE, "ERROR: %s", out_dir);
+
+  if (!S_ISDIR(st.st_mode))
+    fatal("ERROR: %s is not a directory\n", out_dir);
+
+  if(access(out_dir, W_OK|X_OK))
+    err(EXIT_FAILURE, "ERROR: %s", out_dir);
 
   // Traverse the contents of inp_dir. It is ordered as per current locale.
 
@@ -343,11 +347,10 @@ ls_flac(char* const inp_dir, char* const out_dir) {
       int   skip     = 0;
 
       // Stat follows symbolic links.
-      struct stat info;
-      if(stat(inp_path, &info))
+      if(stat(inp_path, &st))
         err(EXIT_FAILURE, "ERROR: %s", inp_path);
 
-      if (!S_ISREG(info.st_mode)) {
+      if (!S_ISREG(st.st_mode)) {
         fprintf(stderr, "WARNING: Skipping %s as it is not regular file\n", inp_path);
         skip = 1;
       }
@@ -375,16 +378,19 @@ ls_flac(char* const inp_dir, char* const out_dir) {
           // This is the 1st FLAC file. Initialize Data.
           d                = my_malloc(sizeof(Data));
 
-          d->max_blocksize = m.data.stream_info.max_blocksize;
-          d->sample_rate   = m.data.stream_info.sample_rate;
-          d->channels      = m.data.stream_info.channels;
-          d->total_samples = m.data.stream_info.total_samples;
-
-          d->inp_paths     = my_malloc(sizeof(char*) * size);
-          d->out_paths     = my_malloc(sizeof(char*) * size);
-          d->inp_paths[0]  = inp_path;
-          d->out_paths[0]  = out_path;
-          d->num_paths     = 1;
+          d->max_blocksize   = m.data.stream_info.max_blocksize;
+          d->sample_rate     = m.data.stream_info.sample_rate;
+          d->channels        = m.data.stream_info.channels;
+          d->bits_per_sample = m.data.stream_info.bits_per_sample;
+          d->total_samples   = m.data.stream_info.total_samples;
+          d->comments        = NULL;
+          d->enc             = NULL;
+          d->bitrate         = OPUS_AUTO;
+          d->inp_paths       = my_malloc(sizeof(char*) * size);
+          d->out_paths       = my_malloc(sizeof(char*) * size);
+          d->inp_paths[0]    = inp_path;
+          d->out_paths[0]    = out_path;
+          d->num_paths       = 1;
         }
         else {
           if (d->max_blocksize < m.data.stream_info.max_blocksize)
@@ -395,6 +401,9 @@ ls_flac(char* const inp_dir, char* const out_dir) {
 
           if (d->channels    != m.data.stream_info.channels)
             fatal("ERROR: Num of channels in %s differs from that in %s\n", inp_path, d->inp_paths[0]);
+
+          if (d->bits_per_sample < m.data.stream_info.bits_per_sample)
+            d->bits_per_sample = m.data.stream_info.bits_per_sample;
 
           d->total_samples += m.data.stream_info.total_samples;
 
@@ -411,6 +420,8 @@ ls_flac(char* const inp_dir, char* const out_dir) {
   if (d == NULL)
     fatal("ERROR: No FLAC files was found in %s\n", inp_dir);
 
+  d->enc_buffer = my_malloc(d->channels * d->max_blocksize * sizeof(float));
+
   return d;
 }
 
@@ -420,6 +431,11 @@ int main(int argc, char *argv[])
 {
   // To make this program locale-aware.
   setlocale(LC_ALL, "");
+
+	if(argc != 3) {
+		fprintf(stderr, "USAGE: %s infile.flac outfile.opus\n", argv[0]);
+		return 1;
+	}
 
   Data* d = ls_flac(argv[1], argv[2]);
 
@@ -432,45 +448,42 @@ int main(int argc, char *argv[])
     printf("%s\t%s\n", d->inp_paths[i], d->out_paths[i]);
   }
 
-  exit(0);
+  for (int i = 0; i != d->num_paths; ++i) {
+    d->initialized = 0;
+    d->idx         = i;
 
-	if(argc != 3) {
-		fprintf(stderr, "USAGE: %s infile.flac outfile.opus\n", argv[0]);
-		return 1;
-	}
+	  FLAC__StreamDecoder* dec = FLAC__stream_decoder_new();
+    assert(dec != NULL);
 
-	FLAC__StreamDecoder* dec = FLAC__stream_decoder_new();
-	if(dec == NULL) {
-		fprintf(stderr, "ERROR: Allocating decoder\n");
-		return 1;
-	}
+    FLAC__stream_decoder_set_md5_checking(dec, true);
+    FLAC__stream_decoder_set_metadata_respond(dec, FLAC__METADATA_TYPE_VORBIS_COMMENT);
 
-  FLAC__stream_decoder_set_md5_checking(dec, true);
-  FLAC__stream_decoder_set_metadata_respond(dec, FLAC__METADATA_TYPE_VORBIS_COMMENT);
+    FLAC__StreamDecoderInitStatus	init_status =
+      FLAC__stream_decoder_init_file(dec, d->inp_paths[i], write_cb, meta_cb, error_cb, d);
+	  if(init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK)
+		  fatal("ERROR: Initializing decoder on %s: %s\n", d->inp_paths[i],
+          FLAC__StreamDecoderInitStatusString[init_status]);
 
-  Client client;
-  client.bitrate     = 192000;
-  client.in_path     = argv[1];
-  client.out_path    = argv[2];
-  client.initialized = 0;
+	  if(!FLAC__stream_decoder_process_until_end_of_stream(dec))
+      fatal("ERROR: Decoding %s: %s\n", d->inp_paths[i],
+          FLAC__StreamDecoderStateString[FLAC__stream_decoder_get_state(dec)]);
 
-  FLAC__StreamDecoderInitStatus	init_status =
-  FLAC__stream_decoder_init_file(dec, argv[1], write_cb, meta_cb, error_cb, &client);
-	if(init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
-		fprintf(stderr, "ERROR: initializing decoder: %s\n", FLAC__StreamDecoderInitStatusString[init_status]);
-		return 1;
-	}
+    FLAC__stream_decoder_delete(dec);
 
-	FLAC__bool ok = FLAC__stream_decoder_process_until_end_of_stream(dec);
-  // If the FLAC file is empty, the write_cb() is never called.
-  if (!client.initialized)
-    initialize_enc(&client);
+    // If the FLAC file is empty, the write_cb() is never called.
+    if (!d->initialized)
+      initialize_enc(d);
+  }
 
-	FLAC__stream_decoder_delete(dec);
-  ope_encoder_drain(client.enc);
-  ope_encoder_destroy(client.enc);
-  ope_comments_destroy(client.comments);
-  free(client.enc_buffer);
+  ope_encoder_drain(d->enc);
+  ope_encoder_destroy(d->enc);
+  ope_comments_destroy(d->comments);
 
-	return !ok;
+  for (int i = 0; i != d->num_paths; ++i) {
+    free(d->inp_paths[i]);
+    free(d->out_paths[i]);
+  }
+  free(d->enc_buffer);
+
+	return EXIT_SUCCESS;
 }
