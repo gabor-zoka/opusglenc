@@ -8,7 +8,13 @@
 #include <errno.h>
 #include <err.h>
 #include <stdarg.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <locale.h>
+#include <unistd.h>
 
+#include <FLAC/metadata.h>
 #include <FLAC/stream_decoder.h>
 #include <opusenc.h>
 
@@ -17,8 +23,8 @@
 
 
 
-static void
-fatal(const char *format, ...) {
+void
+fatal(const char* format, ...) {
   va_list ap;
   va_start(ap, format);
   vfprintf(stderr, format, ap);
@@ -29,7 +35,7 @@ fatal(const char *format, ...) {
 
 
 void*
-mymalloc(size_t size) {
+my_malloc(size_t size) {
   // malloc can return NULL if size == 0;
   assert(size > 0);
 
@@ -39,6 +45,25 @@ mymalloc(size_t size) {
     fatal("ERROR: Out of memory\n");
 
   return ret;
+}
+
+
+
+char*
+my_sprintf(const char* format, ...) {
+  va_list  ap1, ap2;
+  va_start(ap1, format);
+  va_copy (ap2, ap1);
+
+  const int len = vsnprintf(NULL, 0, format, ap1) + 1;
+  va_end(ap1);
+
+  char* buf = my_malloc(len);
+
+  vsnprintf(buf, len, format, ap2);
+  va_end(ap2);
+
+  return buf;
 }
 
 
@@ -107,7 +132,7 @@ void initialize_enc(Client* const cli) {
 
   config_enc(cli->enc, cli);
 
-  cli->enc_buffer  = mymalloc(cli->channels * cli->max_blocksize * sizeof(float));
+  cli->enc_buffer  = my_malloc(cli->channels * cli->max_blocksize * sizeof(float));
 
   cli->initialized = 1;
 }
@@ -119,7 +144,6 @@ write_cb(const FLAC__StreamDecoder* dec,
          const FLAC__Frame*         frame,
          const FLAC__int32* const   buffer[],
          void*                      client) {
-  dec;
   Client* cli = client;
 
   // Set up the encoder before we write the first frame
@@ -161,13 +185,13 @@ read_gain(const char* const   str,
   assert(pmatch.rm_so != -1);
 
   const regoff_t len      = pmatch.rm_eo - pmatch.rm_so; assert(len >= 0);
-  char* const    gain_str = mymalloc(len + 1);
+  char* const    gain_str = my_malloc(len + 1);
   memcpy(gain_str, str + pmatch.rm_so, len);
   gain_str[len] = '\0';
 
   double gain = strtod(gain_str, NULL);
   if (errno)
-    err(EXIT_FAILURE, "ERROR: Parsing %s of %s\n", str, cli->in_path);
+    err(EXIT_FAILURE, "ERROR: Parsing %s of %s", str, cli->in_path);
 
   free(gain_str);
 
@@ -189,12 +213,9 @@ add_r128_gain_tag(OggOpusComments* const comments,
                   const char* const      key,
                   const double           gain) {
   // convert float to Q7.8 number: Q = round(f * 2^8)
-  // See gain_to_q78num in 
+  // See gain_to_q78num() in
   // https://github.com/Moonbase59/loudgain/blob/master/src/tag.cc
-  const int i   = round(gain * 256.0);
-  const int len = snprintf(NULL, 0, "%d", i) + 1;
-  char*     str = mymalloc(len);
-  snprintf(str, len, "%d", i);
+  char* str = my_sprintf("%d", round(gain * 256.0));
 
   assert(ope_comments_add(comments, key, str) == OPE_OK);
 
@@ -207,7 +228,6 @@ void
 meta_cb(const FLAC__StreamDecoder*  dec,
         const FLAC__StreamMetadata* meta,
         void*                       client) {
-	dec;
   Client* cli = client;
 
 	if (meta->type == FLAC__METADATA_TYPE_STREAMINFO) {
@@ -234,7 +254,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
     double track_gain = NAN;
 
     while (entry != entry_end) {
-      const char* const comment = entry->entry;
+      const char* const comment = (const char*)entry->entry;
 
       if (regexec(&replaygain_re, comment, 2, pmatch, 0)) {
         // Not REPLAYGAIN_*
@@ -269,15 +289,151 @@ void
 error_cb(const FLAC__StreamDecoder*     dec,
          FLAC__StreamDecoderErrorStatus status,
          void*                          client) {
-	dec, client;
-
 	fprintf(stderr, "ERROR: %s\n", FLAC__StreamDecoderErrorStatusString[status]);
+}
+
+
+
+
+typedef struct {
+  unsigned 	   max_blocksize;
+  unsigned 	   sample_rate;
+  unsigned 	   channels;
+  FLAC__uint64 total_samples;
+
+  size_t       num_paths;
+  char**       inp_paths;
+  char**       out_paths;
+} Data;
+
+
+
+Data*
+ls_flac(char* const inp_dir, char* const out_dir) {
+  // Trim tailing slashes on input dirs.
+
+  regex_t slash_re;
+  assert(regcomp(&slash_re, "/+$", REG_EXTENDED|REG_ICASE) == 0);
+  regmatch_t pmatch[1];
+
+  if(!regexec(&slash_re, inp_dir, 1, pmatch, 0))
+    inp_dir[pmatch[0].rm_so] = '\0';
+  if(!regexec(&slash_re, out_dir, 1, pmatch, 0))
+    out_dir[pmatch[0].rm_so] = '\0';
+
+  // Traverse the contents of inp_dir. It is ordered as per current locale.
+
+  struct dirent **list = NULL;
+  // Scandir follows symbolic links.
+  int size = scandir(inp_dir, &list, NULL, alphasort);
+  if (size == -1)
+    err(EXIT_FAILURE, "ERROR: %s", inp_dir);
+
+  regex_t flac_re;
+  assert(regcomp(&flac_re, ".flac?$", REG_EXTENDED|REG_ICASE) == 0);
+
+  FLAC__StreamMetadata m;
+  Data*                d = NULL;
+
+  for (int i = 0; i != size; ++i) {
+    if (!regexec(&flac_re, list[i]->d_name, 1, pmatch, 0)) {
+      // Matches ".flac?$"
+
+      char* inp_path = my_sprintf("%s/%s", inp_dir, list[i]->d_name);
+      int   skip     = 0;
+
+      // Stat follows symbolic links.
+      struct stat info;
+      if(stat(inp_path, &info))
+        err(EXIT_FAILURE, "ERROR: %s", inp_path);
+
+      if (!S_ISREG(info.st_mode)) {
+        fprintf(stderr, "WARNING: Skipping %s as it is not regular file\n", inp_path);
+        skip = 1;
+      }
+      // Access follows symbolic links.
+      else if (access(inp_path, R_OK)) {
+        fprintf(stderr, "WARNING: Skipping %s as not readable: %s\n", inp_path, strerror(errno));
+        skip = 1;
+      }
+      else if (!FLAC__metadata_get_streaminfo(inp_path, &m)) {
+        fprintf(stderr, "WARNING: Skipping %s as it is not a FLAC file\n", inp_path);
+        skip = 1;
+      }
+
+      if(skip) {
+        free(inp_path);
+      }
+      else {
+        // This is a FLAC file.
+
+        // Generate the output path.
+        list[i]->d_name[pmatch[0].rm_so] = '\0';
+        char* out_path = my_sprintf("%s/%s.opus", out_dir, list[i]->d_name);
+
+        if (d == NULL) {
+          // This is the 1st FLAC file. Initialize Data.
+          d                = my_malloc(sizeof(Data));
+
+          d->max_blocksize = m.data.stream_info.max_blocksize;
+          d->sample_rate   = m.data.stream_info.sample_rate;
+          d->channels      = m.data.stream_info.channels;
+          d->total_samples = m.data.stream_info.total_samples;
+
+          d->inp_paths     = my_malloc(sizeof(char*) * size);
+          d->out_paths     = my_malloc(sizeof(char*) * size);
+          d->inp_paths[0]  = inp_path;
+          d->out_paths[0]  = out_path;
+          d->num_paths     = 1;
+        }
+        else {
+          if (d->max_blocksize < m.data.stream_info.max_blocksize)
+            d->max_blocksize = m.data.stream_info.max_blocksize;
+
+          if (d->sample_rate != m.data.stream_info.sample_rate)
+            fatal("ERROR: Sample rate in %s differs from that in %s\n",     inp_path, d->inp_paths[0]);
+
+          if (d->channels    != m.data.stream_info.channels)
+            fatal("ERROR: Num of channels in %s differs from that in %s\n", inp_path, d->inp_paths[0]);
+
+          d->total_samples += m.data.stream_info.total_samples;
+
+          d->inp_paths[d->num_paths] = inp_path;
+          d->out_paths[d->num_paths] = out_path;
+          ++d->num_paths;
+        }
+      }
+    }
+    free(list[i]);
+  }
+  free(list);
+
+  if (d == NULL)
+    fatal("ERROR: No FLAC files was found in %s\n", inp_dir);
+
+  return d;
 }
 
 
 
 int main(int argc, char *argv[])
 {
+  // To make this program locale-aware.
+  setlocale(LC_ALL, "");
+
+  Data* d = ls_flac(argv[1], argv[2]);
+
+  printf("max_blocksize = %d\n",          d->max_blocksize);
+  printf("sample_rate   = %d\n",          d->sample_rate);
+  printf("channels      = %d\n",          d->channels);
+  printf("total_samples = %" PRIu64 "\n", d->total_samples);
+
+  for (int i = 0; i != d->num_paths; ++i) {
+    printf("%s\t%s\n", d->inp_paths[i], d->out_paths[i]);
+  }
+
+  exit(0);
+
 	if(argc != 3) {
 		fprintf(stderr, "USAGE: %s infile.flac outfile.opus\n", argv[0]);
 		return 1;
