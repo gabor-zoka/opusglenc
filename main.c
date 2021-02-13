@@ -13,6 +13,7 @@
 #include <dirent.h>
 #include <locale.h>
 #include <unistd.h>
+#include <libgen.h>
 
 #include <FLAC/metadata.h>
 #include <FLAC/stream_decoder.h>
@@ -304,7 +305,7 @@ error_cb(const FLAC__StreamDecoder*     dec,
          void*                          data) {
   Data* d = (Data*)data;
 
-	fatal("ERROR: Stream decoding %s: %s\n", d->inp_paths[d->idx],
+	fatal("ERROR: %s: %s\n", d->inp_paths[d->idx],
       FLAC__StreamDecoderErrorStatusString[status]);
 }
 
@@ -462,7 +463,7 @@ int main(int argc, char *argv[])
   setlocale(LC_ALL, "");
 
 	if(argc != 3) {
-		fprintf(stderr, "USAGE: %s infile.flac outfile.opus\n", argv[0]);
+		fprintf(stderr, "USAGE: %s infile.flac outfile.opus\n", basename(argv[0]));
 		return 1;
 	}
 
