@@ -391,10 +391,12 @@ ls_flac(char* const inp_dir, char* const out_dir) {
         list[i]->d_name[pmatch[0].rm_so] = '\0';
         char* out_path = my_sprintf("%s/%s.opus", out_dir, list[i]->d_name);
 
+        if (access(out_path, F_OK) == 0)
+          fatal("ERROR: %s: Path exists\n", out_path);
+
         if (d == NULL) {
           // This is the 1st FLAC file. Initialize Data.
-          d                = my_malloc(sizeof(Data));
-
+          d                  = my_malloc(sizeof(Data));
           d->max_blocksize   = m.data.stream_info.max_blocksize;
           d->sample_rate     = m.data.stream_info.sample_rate;
           d->channels        = m.data.stream_info.channels;
