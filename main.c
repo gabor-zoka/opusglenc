@@ -226,7 +226,7 @@ write_cb(const FLAC__StreamDecoder* dec,
 
   int err = ope_encoder_write_float(d->enc, d->enc_buffer, frame->header.blocksize);
   if (err != OPE_OK)
-    fatal("ERROR: Encoding aborted: %s\n", ope_strerror(err));
+    fatal("ERROR: %s: %s\n", d->out_paths[d->idx], ope_strerror(err));
 
 	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
@@ -252,9 +252,9 @@ meta_cb(const FLAC__StreamDecoder*  dec,
       meta->data.vorbis_comment.num_comments;
 
     regex_t replaygain_re, album_gain_re, track_gain_re;
-    assert(regcomp(&replaygain_re, "^REPLAYGAIN_",                    REG_ICASE) == 0);
-    assert(regcomp(&album_gain_re, "^REPLAYGAIN_ALBUM_GAIN=\\(.*\\)", REG_ICASE) == 0);
-    assert(regcomp(&track_gain_re, "^REPLAYGAIN_TRACK_GAIN=\\(.*\\)", REG_ICASE) == 0);
+    assert(regcomp(&replaygain_re, "^REPLAYGAIN_",                REG_EXTENDED|REG_ICASE) == 0);
+    assert(regcomp(&album_gain_re, "^REPLAYGAIN_ALBUM_GAIN=(.*)", REG_EXTENDED|REG_ICASE) == 0);
+    assert(regcomp(&track_gain_re, "^REPLAYGAIN_TRACK_GAIN=(.*)", REG_EXTENDED|REG_ICASE) == 0);
 
     regmatch_t pmatch[2];
 
@@ -264,7 +264,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
     while (entry != entry_end) {
       const char* const comment = (const char*)entry->entry;
 
-      if (regexec(&replaygain_re, comment, 2, pmatch, 0)) {
+      if (regexec(&replaygain_re, comment, 0, NULL, 0)) {
         // Not REPLAYGAIN_*
         ope_comments_add_string(d->comments, comment);
       }
@@ -279,21 +279,28 @@ meta_cb(const FLAC__StreamDecoder*  dec,
       ++entry;
     }
 
+    const double limit = 20.0;
+
     if (!isnan(album_gain)) {
-      if (album_gain < 20.0) {
-        // album_gain uses -18LUFS, but Opus (and me) wants to use -23LUFS as 
+      if (album_gain < limit) {
+        // album_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as 
         // target loudness.
         d->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
+
+        // Adjust the track gain now that we scale the album volume to -23 LUFS.
+        if (!isnan(track_gain)) {
+          if (track_gain < limit)
+            add_r128_gain_tag(d->comments, "R128_TRACK_GAIN", track_gain - album_gain);
+          else
+            fprintf(stderr, "WARNING: %s: REPLAYGAIN_TRACK_GAIN >= %.1f hence R128_TRACK_GAIN not set\n",
+                d->out_paths[d->idx], limit);
+        }
       }
       else
-        fprintf(stderr, "WARNING: Album Gain >= 20 hence not applied\n");
-
-      if (!isnan(track_gain))
-        add_r128_gain_tag(d->comments, "R128_TRACK_GAIN", track_gain - album_gain);
-    }
-      
-    if (!isnan(track_gain))
-      add_r128_gain_tag(d->comments, "R128_TRACK_GAIN", track_gain);
+        // In this case do not set R128_TRACK_GAIN either.
+        fprintf(stderr, "WARNING: %s: REPLAYGAIN_ALBUM_GAIN >= %.1f hence not applied\n",
+            d->out_paths[d->idx], limit);
+    } 
   }
 }
 
@@ -457,8 +464,7 @@ ls_flac(char* const inp_dir, char* const out_dir) {
 
 
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
   // To make this program locale-aware.
   setlocale(LC_ALL, "");
 
