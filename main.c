@@ -183,8 +183,8 @@ write_cb(const FLAC__StreamDecoder* dec,
 
 
 double
-read_gain(const char* const   str,
-          const regmatch_t    pmatch,
+read_gain(const char* const str,
+          const regmatch_t  pmatch,
           const Data* const d) {
   assert(pmatch.rm_so != -1);
 
@@ -193,9 +193,13 @@ read_gain(const char* const   str,
   memcpy(gain_str, str + pmatch.rm_so, len);
   gain_str[len] = '\0';
 
-  double gain = strtod(gain_str, NULL);
-  if (errno)
-    err(EXIT_FAILURE, "ERROR: Parsing %s of %s", str, d->inp_paths[d->idx]);
+  char* endp;
+  double gain = strtod(gain_str, &endp);
+  if (gain_str == endp)
+    fatal("ERROR: %s: Parsing %s\n", d->inp_paths[d->idx], str);
+
+  if (isnan(gain))
+    fatal("ERROR: %s: %s\n", d->inp_paths[d->idx], str);
 
   free(gain_str);
 
@@ -263,25 +267,31 @@ meta_cb(const FLAC__StreamDecoder*  dec,
         // Not REPLAYGAIN_*
         ope_comments_add_string(d->comments, comment);
       }
-      else if (!regexec(&album_gain_re, comment, 2, pmatch, 0)) {
-        album_gain = read_gain(comment, pmatch[1], d);
-      }
-      else if (!regexec(&track_gain_re, comment, 2, pmatch, 0)) {
-        track_gain = read_gain(comment, pmatch[1], d);
+      else {
+        if (!regexec(&album_gain_re, comment, 2, pmatch, 0))
+          album_gain = read_gain(comment, pmatch[1], d);
+      
+        if (!regexec(&track_gain_re, comment, 2, pmatch, 0))
+          track_gain = read_gain(comment, pmatch[1], d);
       }
 
       ++entry;
     }
 
-    if (!isnan(album_gain) && album_gain < 20.0) {
-      // album_gain uses -18LUFS, but Opus (and me) wants to use -23LUFS as 
-      // target loudness.
-      d->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
+    if (!isnan(album_gain)) {
+      if (album_gain < 20.0) {
+        // album_gain uses -18LUFS, but Opus (and me) wants to use -23LUFS as 
+        // target loudness.
+        d->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
+      }
+      else
+        fprintf(stderr, "WARNING: Album Gain >= 20 hence not applied\n");
 
       if (!isnan(track_gain))
         add_r128_gain_tag(d->comments, "R128_TRACK_GAIN", track_gain - album_gain);
     }
-    else if (!isnan(track_gain))
+      
+    if (!isnan(track_gain))
       add_r128_gain_tag(d->comments, "R128_TRACK_GAIN", track_gain);
   }
 }
