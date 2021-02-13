@@ -416,10 +416,10 @@ ls_flac(char* const inp_dir, char* const out_dir) {
             d->max_blocksize = m.data.stream_info.max_blocksize;
 
           if (d->sample_rate != m.data.stream_info.sample_rate)
-            fatal("ERROR: Sample rate in %s differs from that in %s\n",     inp_path, d->inp_paths[0]);
+            fatal("ERROR: Sample rate differs between %s and %s\n",     inp_path, d->inp_paths[0]);
 
           if (d->channels    != m.data.stream_info.channels)
-            fatal("ERROR: Num of channels in %s differs from that in %s\n", inp_path, d->inp_paths[0]);
+            fatal("ERROR: Num of channels differs between %s and %s\n", inp_path, d->inp_paths[0]);
 
           if (d->bits_per_sample < m.data.stream_info.bits_per_sample)
             d->bits_per_sample = m.data.stream_info.bits_per_sample;
