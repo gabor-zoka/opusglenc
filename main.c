@@ -144,45 +144,6 @@ void initialize_enc(Data* const d) {
 
 
 
-FLAC__StreamDecoderWriteStatus
-write_cb(const FLAC__StreamDecoder* dec,
-         const FLAC__Frame*         frame,
-         const FLAC__int32* const   buffer[],
-         void*                      data) {
-  Data* d = data;
-
-  // Set up the encoder before we write the first frame
-  if (frame->header.number.sample_number == 0)
-    initialize_enc(d);
-
-  float    scale    = d->scale;
-  unsigned channels = d->channels;
-  unsigned c        = 0;
-
-  while (c != channels) {
-    float*                   o    = d->enc_buffer + c;
-    const FLAC__int32*       i    = buffer[c];
-    const FLAC__int32* const iend = buffer[c] + frame->header.blocksize;
-
-    while (i != iend) {
-      *o = scale * *i;
-
-      o += channels;
-      i += 1;
-    }
-
-    ++c;
-  }
-
-  int err = ope_encoder_write_float(d->enc, d->enc_buffer, frame->header.blocksize);
-  if (err != OPE_OK)
-    fatal("ERROR: Encoding aborted: %s\n", ope_strerror(err));
-
-	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
-}
-
-
-
 double
 read_gain(const char* const str,
           const regmatch_t  pmatch,
@@ -229,6 +190,45 @@ add_r128_gain_tag(OggOpusComments* const comments,
   assert(ope_comments_add(comments, key, str) == OPE_OK);
 
   free(str);
+}
+
+
+
+FLAC__StreamDecoderWriteStatus
+write_cb(const FLAC__StreamDecoder* dec,
+         const FLAC__Frame*         frame,
+         const FLAC__int32* const   buffer[],
+         void*                      data) {
+  Data* d = data;
+
+  // Set up the encoder before we write the first frame
+  if (frame->header.number.sample_number == 0)
+    initialize_enc(d);
+
+  float    scale    = d->scale;
+  unsigned channels = d->channels;
+  unsigned c        = 0;
+
+  while (c != channels) {
+    float*                   o    = d->enc_buffer + c;
+    const FLAC__int32*       i    = buffer[c];
+    const FLAC__int32* const iend = buffer[c] + frame->header.blocksize;
+
+    while (i != iend) {
+      *o = scale * *i;
+
+      o += channels;
+      i += 1;
+    }
+
+    ++c;
+  }
+
+  int err = ope_encoder_write_float(d->enc, d->enc_buffer, frame->header.blocksize);
+  if (err != OPE_OK)
+    fatal("ERROR: Encoding aborted: %s\n", ope_strerror(err));
+
+	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
 
 
