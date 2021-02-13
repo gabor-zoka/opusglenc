@@ -305,7 +305,8 @@ ls_flac(char* const inp_dir, char* const out_dir) {
   // Check the out_dir
 
   struct stat st;
-  if(stat(out_dir, &st))
+  // Stat follows symbolic links.
+  if (stat(out_dir, &st))
     err(EXIT_FAILURE, "ERROR: %s", out_dir);
 
   if (!S_ISDIR(st.st_mode))
@@ -313,10 +314,18 @@ ls_flac(char* const inp_dir, char* const out_dir) {
 
   // Directory does not have to be readable. That is only needed for listing 
   // the dir. We do not need to list out_dir.
-  if(access(out_dir, W_OK))
-    fatal("ERROR: %s: Not writable\n", out_dir);
-  if(access(out_dir, X_OK))
-    fatal("ERROR: %s: Not executable\n", out_dir);
+  if (access(out_dir, W_OK)) {
+    if (errno == EACCES)
+      fatal("ERROR: %s: Not writable\n", out_dir);
+    else
+      err(EXIT_FAILURE, "ERROR: %s", out_dir);
+  }
+  if (access(out_dir, X_OK)) {
+    if (errno == EACCES)
+      fatal("ERROR: %s: Not executable\n", out_dir);
+    else
+      err(EXIT_FAILURE, "ERROR: %s", out_dir);
+  }
 
   // Traverse the contents of inp_dir. It is ordered as per current locale.
 
@@ -351,20 +360,24 @@ ls_flac(char* const inp_dir, char* const out_dir) {
       int   skip     = 0;
 
       // Stat follows symbolic links.
-      if(stat(inp_path, &st))
+      if (stat(inp_path, &st))
         err(EXIT_FAILURE, "ERROR: %s", inp_path);
 
       if (!S_ISREG(st.st_mode)) {
-        fprintf(stderr, "WARNING: Skipping %s as it is not regular file\n", inp_path);
+        fprintf(stderr, "WARNING: Skipping %s: Not regular file\n", inp_path);
         skip = 1;
       }
       // Access follows symbolic links.
       else if (access(inp_path, R_OK)) {
-        fprintf(stderr, "WARNING: Skipping %s as not readable: %s\n", inp_path, strerror(errno));
+        if (errno == EACCES)
+          fprintf(stderr, "WARNING: Skipping %s: Not readable\n", inp_path);
+        else
+          err(EXIT_FAILURE, "ERROR: %s", inp_path);
+
         skip = 1;
       }
       else if (!FLAC__metadata_get_streaminfo(inp_path, &m)) {
-        fprintf(stderr, "WARNING: Skipping %s as it is not a FLAC file\n", inp_path);
+        fprintf(stderr, "WARNING: Skipping %s: Not a FLAC file\n", inp_path);
         skip = 1;
       }
 
