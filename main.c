@@ -305,7 +305,7 @@ error_cb(const FLAC__StreamDecoder*     dec,
          void*                          data) {
   Data* d = (Data*)data;
 
-	fatal("ERROR: %s: %s\n", d->inp_paths[d->idx],
+	fprintf(stderr, "ERROR: %s: %s\n", d->inp_paths[d->idx],
       FLAC__StreamDecoderErrorStatusString[status]);
 }
 
@@ -469,15 +469,6 @@ int main(int argc, char *argv[])
 
   Data* d = ls_flac(argv[1], argv[2]);
 
-  printf("max_blocksize = %d\n",          d->max_blocksize);
-  printf("sample_rate   = %d\n",          d->sample_rate);
-  printf("channels      = %d\n",          d->channels);
-  printf("total_samples = %" PRIu64 "\n", d->total_samples);
-
-  for (int i = 0; i != d->num_paths; ++i) {
-    printf("%s\t%s\n", d->inp_paths[i], d->out_paths[i]);
-  }
-
   for (int i = 0; i != d->num_paths; ++i) {
     d->initialized = 0;
     d->idx         = i;
@@ -490,30 +481,33 @@ int main(int argc, char *argv[])
 
     FLAC__StreamDecoderInitStatus	init_status =
       FLAC__stream_decoder_init_file(dec, d->inp_paths[i], write_cb, meta_cb, error_cb, d);
-	  if(init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK)
-		  fatal("ERROR: Initializing decoder on %s: %s\n", d->inp_paths[i],
+	  if (init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK)
+		  fatal("ERROR: %s: %s\n", d->inp_paths[i],
           FLAC__StreamDecoderInitStatusString[init_status]);
 
-	  if(!FLAC__stream_decoder_process_until_end_of_stream(dec))
-      fatal("ERROR: Decoding %s: %s\n", d->inp_paths[i],
+	  if (!FLAC__stream_decoder_process_until_end_of_stream(dec))
+      fatal("ERROR: %s: %s\n", d->inp_paths[i],
           FLAC__StreamDecoderStateString[FLAC__stream_decoder_get_state(dec)]);
 
     FLAC__stream_decoder_delete(dec);
 
-    // If the FLAC file is empty, the write_cb() is never called.
+    // If the FLAC file is empty, the write_cb() has not been called so 
+    // initialize_enc() has not been executed.
     if (!d->initialized)
       initialize_enc(d);
+
+    free(d->inp_paths[i]);
+    free(d->out_paths[i]);
   }
 
   ope_encoder_drain(d->enc);
   ope_encoder_destroy(d->enc);
   ope_comments_destroy(d->comments);
 
-  for (int i = 0; i != d->num_paths; ++i) {
-    free(d->inp_paths[i]);
-    free(d->out_paths[i]);
-  }
+  free(d->inp_paths);
+  free(d->out_paths);
   free(d->enc_buffer);
+  free(d);
 
 	return EXIT_SUCCESS;
 }
