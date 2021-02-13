@@ -302,6 +302,30 @@ error_cb(const FLAC__StreamDecoder*     dec,
 
 Data*
 ls_flac(char* const inp_dir, char* const out_dir) {
+  // Check the out_dir
+
+  struct stat st;
+  if(stat(out_dir, &st))
+    err(EXIT_FAILURE, "ERROR: %s", out_dir);
+
+  if (!S_ISDIR(st.st_mode))
+    fatal("ERROR: %s: Not a directory\n", out_dir);
+
+  // Directory does not have to be readable. That is only needed for listing 
+  // the dir. We do not need to list out_dir.
+  if(access(out_dir, W_OK))
+    fatal("ERROR: %s: Not writable\n", out_dir);
+  if(access(out_dir, X_OK))
+    fatal("ERROR: %s: Not executable\n", out_dir);
+
+  // Traverse the contents of inp_dir. It is ordered as per current locale.
+
+  struct dirent **list = NULL;
+  // Scandir follows symbolic links.
+  int size = scandir(inp_dir, &list, NULL, alphasort);
+  if (size == -1)
+    err(EXIT_FAILURE, "ERROR: %s", inp_dir);
+
   // Trim tailing slashes on input dirs.
 
   regex_t slash_re;
@@ -312,26 +336,6 @@ ls_flac(char* const inp_dir, char* const out_dir) {
     inp_dir[pmatch[0].rm_so] = '\0';
   if(!regexec(&slash_re, out_dir, 1, pmatch, 0))
     out_dir[pmatch[0].rm_so] = '\0';
-
-  // Check the out_dir
-
-  struct stat st;
-  if(stat(out_dir, &st))
-    err(EXIT_FAILURE, "ERROR: %s", out_dir);
-
-  if (!S_ISDIR(st.st_mode))
-    fatal("ERROR: %s is not a directory\n", out_dir);
-
-  if(access(out_dir, W_OK|X_OK))
-    err(EXIT_FAILURE, "ERROR: %s", out_dir);
-
-  // Traverse the contents of inp_dir. It is ordered as per current locale.
-
-  struct dirent **list = NULL;
-  // Scandir follows symbolic links.
-  int size = scandir(inp_dir, &list, NULL, alphasort);
-  if (size == -1)
-    err(EXIT_FAILURE, "ERROR: %s", inp_dir);
 
   regex_t flac_re;
   assert(regcomp(&flac_re, ".flac?$", REG_EXTENDED|REG_ICASE) == 0);
