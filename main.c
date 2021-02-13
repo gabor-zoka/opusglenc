@@ -338,7 +338,7 @@ ls_flac(char* const inp_dir, char* const out_dir) {
     out_dir[pmatch[0].rm_so] = '\0';
 
   regex_t flac_re;
-  assert(regcomp(&flac_re, ".flac?$", REG_EXTENDED|REG_ICASE) == 0);
+  assert(regcomp(&flac_re, "\\.flac?$", REG_EXTENDED|REG_ICASE) == 0);
 
   FLAC__StreamMetadata m;
   Data*                d = NULL;
@@ -422,7 +422,7 @@ ls_flac(char* const inp_dir, char* const out_dir) {
   free(list);
 
   if (d == NULL)
-    fatal("ERROR: No FLAC files was found in %s\n", inp_dir);
+    fatal("ERROR: %s: No FLAC files found\n", inp_dir);
 
   d->enc_buffer = my_malloc(d->channels * d->max_blocksize * sizeof(float));
 
