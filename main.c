@@ -45,6 +45,23 @@ typedef struct {
 
 
 
+int fail_warning=0;
+
+
+
+void
+warning(const char* format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  vfprintf(stderr, format, ap);
+  va_end(ap);
+
+  if (fail_warning)
+    exit(EXIT_FAILURE);
+}
+
+
+
 void
 fatal(const char* format, ...) {
   va_list ap;
@@ -292,13 +309,13 @@ meta_cb(const FLAC__StreamDecoder*  dec,
           if (track_gain < limit)
             add_r128_gain_tag(d->comments, "R128_TRACK_GAIN", track_gain - album_gain);
           else
-            fprintf(stderr, "WARNING: %s: REPLAYGAIN_TRACK_GAIN >= %.1f hence R128_TRACK_GAIN not set\n",
+            warning("WARNING: %s: REPLAYGAIN_TRACK_GAIN >= %.1f hence R128_TRACK_GAIN not set\n",
                 d->out_paths[d->idx], limit);
         }
       }
       else
         // In this case do not set R128_TRACK_GAIN either.
-        fprintf(stderr, "WARNING: %s: REPLAYGAIN_ALBUM_GAIN >= %.1f hence not applied\n",
+        warning("WARNING: %s: REPLAYGAIN_ALBUM_GAIN >= %.1f hence not applied\n",
             d->out_paths[d->idx], limit);
     } 
   }
@@ -382,20 +399,20 @@ ls_flac(char* const inp_dir, char* const out_dir) {
         err(EXIT_FAILURE, "ERROR: %s", inp_path);
 
       if (!S_ISREG(st.st_mode)) {
-        fprintf(stderr, "WARNING: Skipping %s: Not regular file\n", inp_path);
+        warning("WARNING: Skipping %s: Not regular file\n", inp_path);
         skip = 1;
       }
       // Access follows symbolic links.
       else if (access(inp_path, R_OK)) {
         if (errno == EACCES)
-          fprintf(stderr, "WARNING: Skipping %s: Not readable\n", inp_path);
+          warning("WARNING: Skipping %s: Not readable\n", inp_path);
         else
           err(EXIT_FAILURE, "ERROR: %s", inp_path);
 
         skip = 1;
       }
       else if (!FLAC__metadata_get_streaminfo(inp_path, &m)) {
-        fprintf(stderr, "WARNING: Skipping %s: Not a FLAC file\n", inp_path);
+        warning("WARNING: Skipping %s: Not a FLAC file\n", inp_path);
         skip = 1;
       }
 
