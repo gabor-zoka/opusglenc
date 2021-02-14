@@ -146,14 +146,14 @@ void initialize_enc(Data* const d) {
     d->enc = ope_encoder_create_file(d->out_paths[d->idx], d->comments,
         d->sample_rate, d->channels, 0, &err);
     if (d->enc == NULL || err != OPE_OK)
-      fatal("ERROR: Encoding to file %s: %s\n", d->out_paths[d->idx], ope_strerror(err));
+      fatal("ERROR: %s: %s while initializing encoder\n", d->out_paths[d->idx], ope_strerror(err));
 
     config_enc(d->enc, d);
   }
   else {
     err = ope_encoder_continue_new_file(d->enc, d->out_paths[d->idx], d->comments);
     if (err != OPE_OK)
-      fatal("ERROR: Encoding to file %s: %s\n", d->out_paths[d->idx], ope_strerror(err));
+      fatal("ERROR: %s: %s while encoding\n", d->out_paths[d->idx], ope_strerror(err));
   }
 
   d->initialized = 1;
