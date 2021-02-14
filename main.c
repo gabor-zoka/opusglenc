@@ -489,7 +489,8 @@ usage(const char* const prg) {
   fprintf(stderr, "Encodes all *.fla or *.flac FLAC files from input-dir into OPUS format.\n");
   fprintf(stderr, "The output goes into output-dir with same filename with *.opus extension.\n");
   fprintf(stderr, "The tracks are assumed to form an album. The conversion uses the GAPLESS\n");
-  fprintf(stderr, "encoding provided by libopusenc.\n\n");
+  fprintf(stderr, "encoding provided by libopusenc.\n");
+  fprintf(stderr, "The volume is scaled to -23 LUFS if REPLAYGAIN_ALBUM_GAIN exists.\n\n");
   fprintf(stderr, "  -h   This help.\n");
   fprintf(stderr, "  -w   Fail even on warnings.\n");
   fprintf(stderr, "  -b   Bitrate in bsp. Must be integer.\n");
