@@ -484,8 +484,16 @@ ls_flac(char* const inp_dir, char* const out_dir) {
 
 
 void
-usage() {
-  	fprintf(stderr, "\nUSAGE: encode infile.flac outfile.opus\n");
+usage(const char* const prg) {
+  fprintf(stderr, "USAGE: %s [-h] [-w] [-b bitrate] input-dir output-dir\n\n", prg);
+  fprintf(stderr, "Encodes all *.fla or *.flac FLAC files from input-dir into OPUS format.\n");
+  fprintf(stderr, "The output goes into output-dir with same filename with *.opus extension.\n");
+  fprintf(stderr, "The tracks are assumed to form an album. The conversion uses the GAPLESS\n");
+  fprintf(stderr, "encoding provided by libopusenc.\n\n");
+  fprintf(stderr, "  -h   This help.\n");
+  fprintf(stderr, "  -w   Fail even on warnings.\n");
+  fprintf(stderr, "  -b   Bitrate in bsp. Must be integer.\n");
+  fprintf(stderr, "       (Example: 128000 means 128 kbps.)\n");
 }
 
 
@@ -494,13 +502,15 @@ int main(int argc, char *argv[]) {
   // To make this program locale-aware.
   setlocale(LC_ALL, "");
 
+  char* prg = basename(argv[0]);
+
   opus_int32 bitrate;
   int        c;
   char*      endp;
   while ((c = getopt (argc, argv, "hwb:")) != -1)
     switch (c) {
       case 'h':
-        usage();
+        usage(prg);
         return EXIT_SUCCESS;
         break;
 
@@ -516,7 +526,7 @@ int main(int argc, char *argv[]) {
 
       case '?':
         // Parameter errors. getopt() already prints out an error.
-        usage();
+        usage(prg);
         return EXIT_FAILURE;
         break;
 
@@ -532,7 +542,7 @@ int main(int argc, char *argv[]) {
     else if (argc - optind > 2)
       fprintf(stderr, "ERROR: Too many parameters\n");
 
-    usage();
+    usage(prg);
     return EXIT_FAILURE;
   }
 
