@@ -45,7 +45,7 @@ typedef struct {
 
 
 
-int fail_warning=0;
+int exit_warning = 0;
 
 
 
@@ -56,7 +56,7 @@ warning(const char* format, ...) {
   vfprintf(stderr, format, ap);
   va_end(ap);
 
-  if (fail_warning)
+  if (exit_warning)
     exit(EXIT_FAILURE);
 }
 
@@ -114,22 +114,24 @@ config_enc(OggOpusEnc* const enc, const Data* const d) {
          ope_encoder_ctl(enc, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC))                        == OPE_OK &&
          ope_encoder_ctl(enc, OPUS_SET_COMPLEXITY(10))                                   == OPE_OK &&
          ope_encoder_ctl(enc, OPUS_SET_PACKET_LOSS_PERC(0))                              == OPE_OK &&
-         ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, d->bits_per_sample)))) == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, d->bits_per_sample)))) == OPE_OK);
 
-         // We cannot fail on bitrate if it is positive:
-         //
-         // case OPUS_SET_BITRATE_REQUEST:
-         // {
-         //    opus_int32 value = va_arg(ap, opus_int32);
-         //    if (value != OPUS_AUTO && value != OPUS_BITRATE_MAX)
-         //    {
-         //       if (value <= 0)
-         //          goto bad_arg;
-         //       value = IMIN(300000*st->layout.nb_channels, IMAX(500*st->layout.nb_channels, value));
-         //    }
-         //    st->bitrate_bps = value;
-         // }
-         ope_encoder_ctl(enc, OPUS_SET_BITRATE(d->bitrate)) == OPE_OK);
+  // We cannot fail on bitrate if it is positive:
+  //
+  // case OPUS_SET_BITRATE_REQUEST:
+  // {
+  //    opus_int32 value = va_arg(ap, opus_int32);
+  //    if (value != OPUS_AUTO && value != OPUS_BITRATE_MAX)
+  //    {
+  //       if (value <= 0)
+  //          goto bad_arg;
+  //       value = IMIN(300000*st->layout.nb_channels, IMAX(500*st->layout.nb_channels, value));
+  //    }
+  //    st->bitrate_bps = value;
+  // }
+  int err = ope_encoder_ctl(enc, OPUS_SET_BITRATE(d->bitrate));
+  if (err != OPE_OK)
+    fatal("ERROR: Invalid bitrate: %s\n", ope_strerror(err));
 }
 
 
@@ -481,16 +483,62 @@ ls_flac(char* const inp_dir, char* const out_dir) {
 
 
 
+void
+usage() {
+  	fprintf(stderr, "\nUSAGE: encode infile.flac outfile.opus\n");
+}
+
+
+
 int main(int argc, char *argv[]) {
   // To make this program locale-aware.
   setlocale(LC_ALL, "");
 
-	if(argc != 3) {
-		fprintf(stderr, "USAGE: %s infile.flac outfile.opus\n", basename(argv[0]));
-		return 1;
-	}
+  opus_int32 bitrate;
+  int        c;
+  char*      endp;
+  while ((c = getopt (argc, argv, "hwb:")) != -1)
+    switch (c) {
+      case 'h':
+        usage();
+        return EXIT_SUCCESS;
+        break;
 
-  Data* d = ls_flac(argv[1], argv[2]);
+      case 'w':
+        exit_warning = 1;
+        break;
+
+      case 'b':
+        bitrate = (opus_int32)strtoimax(optarg, &endp, 10);
+        if (optarg == endp)
+          fatal("ERROR: Parsing bitrate = %s\n", optarg);
+        break;
+
+      case '?':
+        // Parameter errors. getopt() already prints out an error.
+        usage();
+        return EXIT_FAILURE;
+        break;
+
+      default:
+        abort();
+    }
+  
+  if (argc - optind != 2) {
+	  if (argc - optind == 0)
+      fprintf(stderr, "ERROR: Missing input and output directories\n");
+    else if (argc - optind == 1)
+      fprintf(stderr, "ERROR: Missing output directory\n");
+    else if (argc - optind > 2)
+      fprintf(stderr, "ERROR: Too many parameters\n");
+
+    usage();
+    return EXIT_FAILURE;
+  }
+
+  Data* d = ls_flac(argv[optind], argv[optind + 1]);
+
+  d->bitrate = bitrate;
 
   for (int i = 0; i != d->num_paths; ++i) {
     d->initialized = 0;
