@@ -323,7 +323,7 @@ error_cb(const FLAC__StreamDecoder*     dec,
 
 
 Data*
-ls_flac(char* const inp_dir, char* const out_dir) {
+ls_flac(char* const out_dir, char* const inp_dir) {
   // Check the out_dir
 
   struct stat st;
@@ -471,7 +471,7 @@ ls_flac(char* const inp_dir, char* const out_dir) {
 
 void
 usage(const char* const prg) {
-  fprintf(stderr, "USAGE: %s [-h] [-w] [-b bitrate] input-dir output-dir\n\n", prg);
+  fprintf(stderr, "USAGE: %s [-h] [-w] [-b bitrate] output-dir input-dir\n\n", prg);
   fprintf(stderr, "Encodes all *.fla or *.flac FLAC files from input-dir into OPUS format.\n");
   fprintf(stderr, "The output goes into output-dir with same filename with *.opus extension.\n");
   fprintf(stderr, "The tracks are assumed to form an album. The conversion uses the GAPLESS\n");
