@@ -287,8 +287,6 @@ meta_cb(const FLAC__StreamDecoder*  dec,
           // track_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as 
           // target loudness.
           d->scale *= exp((track_gain - 5.0) / 20.0 * M_LN10);
-
-          assert(ope_comments_add(d->comments, "R128_TRACK_GAIN", "0") == OPE_OK);
         }
         else
           warning("WARNING: %s: REPLAYGAIN_TRACK_GAIN >= %.1f hence not applied\n",
@@ -301,8 +299,6 @@ meta_cb(const FLAC__StreamDecoder*  dec,
           // album_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as 
           // target loudness.
           d->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
-
-          assert(ope_comments_add(d->comments, "R128_TRACK_GAIN", "0") == OPE_OK);
         }
         else
           warning("WARNING: %s: REPLAYGAIN_ALBUM_GAIN >= %.1f hence not applied\n",
@@ -483,7 +479,7 @@ usage(const char* const prg) {
   fprintf(stderr, "The volume is scaled to -23 LUFS with REPLAYGAIN_ALBUM_GAIN if exists.\n\n");
   fprintf(stderr, "  -h   This help.\n");
   fprintf(stderr, "  -w   Fail even on warnings.\n");
-  fprintf(stderr, "  -b   Bitrate in bsp. Must be integer (default 160000).\n");
+  fprintf(stderr, "  -b   Bitrate in bsp. Must be integer (default 192000).\n");
   fprintf(stderr, "  -i   Each track independently encoded (i.e. not gapless.\n");
   fprintf(stderr, "       Scaled to -23 LUFS with REPLAYGAIN_TRACK_GAIN\n");
 }
@@ -496,7 +492,7 @@ int main(int argc, char *argv[]) {
 
   char* prg = basename(argv[0]);
 
-  opus_int32 bitrate    = 160000;
+  opus_int32 bitrate    = 192000;
   int        individual = 0;
   int        c;
   char*      endp;
@@ -513,7 +509,7 @@ int main(int argc, char *argv[]) {
 
       case 'b':
         bitrate = (opus_int32)strtoimax(optarg, &endp, 10);
-        if (optarg == endp)
+        if (optarg == endp || endp < optarg + strlen(optarg))
           fatal("ERROR: Parsing bitrate = %s\n", optarg);
         break;
 
