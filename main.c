@@ -33,6 +33,7 @@ typedef struct {
   OggOpusComments* comments;
   OggOpusEnc*      enc;
   opus_int32       bitrate;
+  int              individual;
   char**           inp_paths;
   char**           out_paths;
   size_t           num_paths;
@@ -141,7 +142,7 @@ void initialize_enc(Data* const d) {
 
   int err;
 
-  if (d->idx == 0) {
+  if (d->individual || d->idx == 0) {
     if (d->channels > 2)
       fatal("ERROR: Only mono and stereo are supported\n");
 
@@ -197,22 +198,6 @@ int gain_to_q78num(const double gain) {
 
 
 
-void
-add_r128_gain_tag(OggOpusComments* const comments,
-                  const char* const      key,
-                  const double           gain) {
-  // convert float to Q7.8 number: Q = round(f * 2^8)
-  // See gain_to_q78num() in
-  // https://github.com/Moonbase59/loudgain/blob/master/src/tag.cc
-  char* str = my_sprintf("%d", round(gain * 256.0));
-
-  assert(ope_comments_add(comments, key, str) == OPE_OK);
-
-  free(str);
-}
-
-
-
 FLAC__StreamDecoderWriteStatus
 write_cb(const FLAC__StreamDecoder* dec,
          const FLAC__Frame*         frame,
@@ -259,10 +244,6 @@ meta_cb(const FLAC__StreamDecoder*  dec,
   Data* d = data;
 
 	if (meta->type == FLAC__METADATA_TYPE_STREAMINFO) {
-    if (d->comments != NULL)
-      ope_comments_destroy(d->comments);
-
-    d->comments = ope_comments_create();
     d->scale    = exp(-(meta->data.stream_info.bits_per_sample - 1.0) * M_LN2);
 	}
   else if (meta->type == FLAC__METADATA_TYPE_VORBIS_COMMENT) {
@@ -298,28 +279,36 @@ meta_cb(const FLAC__StreamDecoder*  dec,
       ++entry;
     }
 
-    const double limit = 20.0;
+    const double limit = 30.0;
 
-    if (!isnan(album_gain)) {
-      if (album_gain < limit) {
-        // album_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as 
-        // target loudness.
-        d->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
+    if (d->individual) {
+      if (!isnan(track_gain)) {
+        if (track_gain < limit) {
+          // track_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as 
+          // target loudness.
+          d->scale *= exp((track_gain - 5.0) / 20.0 * M_LN10);
 
-        // Adjust the track gain now that we scale the album volume to -23 LUFS.
-        if (!isnan(track_gain)) {
-          if (track_gain < limit)
-            add_r128_gain_tag(d->comments, "R128_TRACK_GAIN", track_gain - album_gain);
-          else
-            warning("WARNING: %s: REPLAYGAIN_TRACK_GAIN >= %.1f hence R128_TRACK_GAIN not set\n",
-                d->out_paths[d->idx], limit);
+          assert(ope_comments_add(d->comments, "R128_TRACK_GAIN", "0") == OPE_OK);
         }
+        else
+          warning("WARNING: %s: REPLAYGAIN_TRACK_GAIN >= %.1f hence not applied\n",
+              d->out_paths[d->idx], limit);
       }
-      else
-        // In this case do not set R128_TRACK_GAIN either.
-        warning("WARNING: %s: REPLAYGAIN_ALBUM_GAIN >= %.1f hence not applied\n",
-            d->out_paths[d->idx], limit);
-    } 
+    }
+    else {
+      if (!isnan(album_gain)) {
+        if (album_gain < limit) {
+          // album_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as 
+          // target loudness.
+          d->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
+
+          assert(ope_comments_add(d->comments, "R128_TRACK_GAIN", "0") == OPE_OK);
+        }
+        else
+          warning("WARNING: %s: REPLAYGAIN_ALBUM_GAIN >= %.1f hence not applied\n",
+              d->out_paths[d->idx], limit);
+      }
+    }
   }
 }
 
@@ -442,6 +431,7 @@ ls_flac(char* const inp_dir, char* const out_dir) {
           d->comments        = NULL;
           d->enc             = NULL;
           d->bitrate         = OPUS_AUTO;
+          d->individual      = 0;
           d->inp_paths       = my_malloc(sizeof(char*) * size);
           d->out_paths       = my_malloc(sizeof(char*) * size);
           d->inp_paths[0]    = inp_path;
@@ -490,11 +480,12 @@ usage(const char* const prg) {
   fprintf(stderr, "The output goes into output-dir with same filename with *.opus extension.\n");
   fprintf(stderr, "The tracks are assumed to form an album. The conversion uses the GAPLESS\n");
   fprintf(stderr, "encoding provided by libopusenc.\n");
-  fprintf(stderr, "The volume is scaled to -23 LUFS if REPLAYGAIN_ALBUM_GAIN exists.\n\n");
+  fprintf(stderr, "The volume is scaled to -23 LUFS with REPLAYGAIN_ALBUM_GAIN if exists.\n\n");
   fprintf(stderr, "  -h   This help.\n");
   fprintf(stderr, "  -w   Fail even on warnings.\n");
-  fprintf(stderr, "  -b   Bitrate in bsp. Must be integer.\n");
-  fprintf(stderr, "       (Example: 128000 means 128 kbps.)\n");
+  fprintf(stderr, "  -b   Bitrate in bsp. Must be integer (default 160000).\n");
+  fprintf(stderr, "  -i   Each track independently encoded (i.e. not gapless.\n");
+  fprintf(stderr, "       Scaled to -23 LUFS with REPLAYGAIN_TRACK_GAIN\n");
 }
 
 
@@ -505,10 +496,11 @@ int main(int argc, char *argv[]) {
 
   char* prg = basename(argv[0]);
 
-  opus_int32 bitrate;
+  opus_int32 bitrate    = 160000;
+  int        individual = 0;
   int        c;
   char*      endp;
-  while ((c = getopt (argc, argv, "hwb:")) != -1)
+  while ((c = getopt (argc, argv, "hwb:i")) != -1)
     switch (c) {
       case 'h':
         usage(prg);
@@ -523,6 +515,10 @@ int main(int argc, char *argv[]) {
         bitrate = (opus_int32)strtoimax(optarg, &endp, 10);
         if (optarg == endp)
           fatal("ERROR: Parsing bitrate = %s\n", optarg);
+        break;
+
+      case 'i':
+        individual = 1;
         break;
 
       case '?':
@@ -549,12 +545,14 @@ int main(int argc, char *argv[]) {
 
   Data* d = ls_flac(argv[optind], argv[optind + 1]);
 
-  d->bitrate = bitrate;
+  d->bitrate    = bitrate;
+  d->individual = individual;
 
   for (int i = 0; i != d->num_paths; ++i) {
     d->initialized = 0;
     d->idx         = i;
 
+    d->comments = ope_comments_create();
 	  FLAC__StreamDecoder* dec = FLAC__stream_decoder_new();
     assert(dec != NULL);
 
@@ -571,20 +569,27 @@ int main(int argc, char *argv[]) {
       fatal("ERROR: %s: %s\n", d->inp_paths[i],
           FLAC__StreamDecoderStateString[FLAC__stream_decoder_get_state(dec)]);
 
-    FLAC__stream_decoder_delete(dec);
-
     // If the FLAC file is empty, the write_cb() has not been called so 
     // initialize_enc() has not been executed.
     if (!d->initialized)
       initialize_enc(d);
 
+    FLAC__stream_decoder_delete(dec);
+    ope_comments_destroy(d->comments);
+
+    if(d->individual) {
+      ope_encoder_drain(d->enc);
+      ope_encoder_destroy(d->enc);
+    }
+
     free(d->inp_paths[i]);
     free(d->out_paths[i]);
   }
 
-  ope_encoder_drain(d->enc);
-  ope_encoder_destroy(d->enc);
-  ope_comments_destroy(d->comments);
+  if(!d->individual) {
+    ope_encoder_drain(d->enc);
+    ope_encoder_destroy(d->enc);
+  }
 
   free(d->inp_paths);
   free(d->out_paths);
