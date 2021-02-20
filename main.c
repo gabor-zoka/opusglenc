@@ -41,7 +41,8 @@ typedef struct {
 
   unsigned         initialized;
   size_t           idx;
-  float            scale;
+  double           scale;
+  double           prev_scale;
 } Data;
 
 
@@ -139,10 +140,22 @@ config_enc(OggOpusEnc* const enc, const Data* const d) {
 
 void initialize_enc(Data* const d) {
   assert(d->initialized == 0);
+  assert(d->scale != 0.0);
 
   int err;
 
-  if (d->individual || d->idx == 0) {
+  // Start a new encoding (non-gapless) when 
+  // - -i option is set
+  // - 1st track
+  // - When the scaling changes (bitdepth or album gain changed).
+  if (d->individual || d->idx == 0 ||
+      fabs(d->scale - d->prev_scale) / fabs(d->scale) > 0.01) {
+
+    if (d->idx != 0) {
+      ope_encoder_drain(d->enc);
+      ope_encoder_destroy(d->enc);
+    }
+
     if (d->channels > 2)
       fatal("ERROR: Only mono and stereo are supported\n");
 
@@ -209,7 +222,7 @@ write_cb(const FLAC__StreamDecoder* dec,
   if (frame->header.number.sample_number == 0)
     initialize_enc(d);
 
-  float    scale    = d->scale;
+  double   scale    = d->scale;
   unsigned channels = d->channels;
   unsigned c        = 0;
 
@@ -428,6 +441,7 @@ ls_flac(char* const out_dir, char* const inp_dir) {
           d->enc             = NULL;
           d->bitrate         = OPUS_AUTO;
           d->individual      = 0;
+          d->prev_scale      = 0.0;
           d->inp_paths       = my_malloc(sizeof(char*) * size);
           d->out_paths       = my_malloc(sizeof(char*) * size);
           d->inp_paths[0]    = inp_path;
@@ -570,22 +584,17 @@ int main(int argc, char *argv[]) {
     if (!d->initialized)
       initialize_enc(d);
 
+    d->prev_scale = d->scale;
+
     FLAC__stream_decoder_delete(dec);
     ope_comments_destroy(d->comments);
-
-    if(d->individual) {
-      ope_encoder_drain(d->enc);
-      ope_encoder_destroy(d->enc);
-    }
 
     free(d->inp_paths[i]);
     free(d->out_paths[i]);
   }
 
-  if(!d->individual) {
-    ope_encoder_drain(d->enc);
-    ope_encoder_destroy(d->enc);
-  }
+  ope_encoder_drain(d->enc);
+  ope_encoder_destroy(d->enc);
 
   free(d->inp_paths);
   free(d->out_paths);
