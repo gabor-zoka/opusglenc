@@ -493,7 +493,7 @@ usage(const char* const prg) {
   fprintf(stderr, "The volume is scaled to -23 LUFS with REPLAYGAIN_ALBUM_GAIN if exists.\n\n");
   fprintf(stderr, "  -h   This help.\n");
   fprintf(stderr, "  -w   Fail even on warnings.\n");
-  fprintf(stderr, "  -b   Bitrate in bsp. Must be integer (default 192000).\n");
+  fprintf(stderr, "  -b   Bitrate in bsp. Must be integer (default 160000).\n");
   fprintf(stderr, "  -i   Each track independently encoded (i.e. not gapless.\n");
   fprintf(stderr, "       Scaled to -23 LUFS with REPLAYGAIN_TRACK_GAIN\n");
 }
@@ -506,7 +506,7 @@ int main(int argc, char *argv[]) {
 
   char* prg = basename(argv[0]);
 
-  opus_int32 bitrate    = 192000;
+  opus_int32 bitrate    = 160000;
   int        individual = 0;
   int        c;
   char*      endp;
