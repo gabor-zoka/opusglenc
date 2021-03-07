@@ -1,3 +1,5 @@
+The idea for proper GAPLESS Opus encoding came from https://github.com/Octocontrabass/opusgap 
+
 Build Instruction:
 
     gcc main.c -Wall -lFLAC -lopusenc -lm -I/usr/include/opus -o opusglenc
