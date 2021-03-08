@@ -149,7 +149,7 @@ void initialize_enc(Data* const d) {
   // - 1st track
   // - When the scaling changes (bitdepth or album gain changed).
   if (d->individual || d->idx == 0 ||
-      fabs(d->scale - d->prev_scale) / fabs(d->scale) > 0.01) {
+      fabs(d->scale - d->prev_scale) / fabs(d->scale) > 0.0005) {
 
     if (d->idx != 0) {
       ope_encoder_drain(d->enc);
