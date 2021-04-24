@@ -49,8 +49,9 @@ typedef struct {
 
 
 
-char version[]    = "1.3";
-int  exit_warning = 1;
+char  version[]    = "1.3";
+int   exit_warning = 1;
+char* prg;
 
 
 
@@ -151,9 +152,13 @@ void initialize_enc(Data* const d) {
   // - -i option is set
   // - 1st track
   // - When the scaling changes (bitdepth or album gain changed).
-  if (d->individual || d->idx == 0 ||
-      fabs(d->scale - d->prev_scale) / fabs(d->scale) > 0.0001) {
+  int resetenc = d->individual || d->idx == 0 ||
+    fabs(d->scale - d->prev_scale) / fabs(d->scale) > 0.0001;
 
+  ope_comments_add_string(d->comments, my_sprintf("ENCODERSETTINGS=%s %s: bitrate=%i, resetencoder=%i",
+    prg, version, d->bitrate, resetenc));
+
+  if (resetenc) {
     if (d->idx != 0) {
       ope_encoder_drain(d->enc);
       ope_encoder_destroy(d->enc);
@@ -496,7 +501,7 @@ ls_flac(char* const out_dir, char* const inp_dir) {
 
 
 void
-usage(const char* const prg) {
+usage() {
   fprintf(stderr, "%s %s\n\n", prg, version);
   fprintf(stderr, "USAGE: %s [-h] [-w] [-b bitrate] output-dir input-dir\n\n", prg);
   fprintf(stderr, "Encodes all *.fla or *.flac FLAC files from input-dir into OPUS format.\n");
@@ -516,7 +521,7 @@ int main(int argc, char *argv[]) {
   // To make this program locale-aware.
   setlocale(LC_ALL, "");
 
-  char* prg = basename(argv[0]);
+  prg = basename(argv[0]);
 
   opus_int32 bitrate    = 160000;
   int        individual = 0;
@@ -525,7 +530,7 @@ int main(int argc, char *argv[]) {
   while ((c = getopt (argc, argv, "hwb:i")) != -1)
     switch (c) {
       case 'h':
-        usage(prg);
+        usage();
         return EXIT_SUCCESS;
         break;
 
@@ -545,7 +550,7 @@ int main(int argc, char *argv[]) {
 
       case '?':
         // Parameter errors. getopt() already prints out an error.
-        usage(prg);
+        usage();
         return EXIT_FAILURE;
         break;
 
@@ -561,7 +566,7 @@ int main(int argc, char *argv[]) {
     else if (argc - optind > 2)
       fprintf(stderr, "ERROR: Too many parameters\n");
 
-    usage(prg);
+    usage();
     return EXIT_FAILURE;
   }
 
