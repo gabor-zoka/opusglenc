@@ -39,13 +39,21 @@ cd -
 
 
 
-if [[ ! -e opus-1.3.1.tar.gz ]]; then
-  curl -ROLJ https://downloads.xiph.org/releases/opus/opus-1.3.1.tar.gz
+# Build Opus from Git to pick up the numerous minor changes.
+#
+# We need to clone rather than just download a given commit in order to have 
+# package version correctly set, which calls for a functioning git. This is 
+# important as each Opus file will feature this at "Encoded with"
+if [[ ! -e opus ]]; then
+  git clone https://github.com/xiph/opus
+  cd opus
+else
+  cd opus
+  git pull
 fi
 
-tar xf opus-1.3.1.tar.gz
-cd     opus-1.3.1
-./configure -prefix=$td --disable-shared --disable-doc
+./autogen.sh
+./configure -prefix=$td --disable-shared --disable-doc --disable-extra-programs
 make check && make install
 cd -
 
