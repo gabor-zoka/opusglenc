@@ -155,8 +155,12 @@ void initialize_enc(Data* const d) {
   int resetenc = d->individual || d->idx == 0 ||
     fabs(d->scale - d->prev_scale) / fabs(d->scale) > 0.0001;
 
-  ope_comments_add_string(d->comments, my_sprintf("ENCODERSETTINGS=%s %s: bitrate=%i, resetencoder=%i",
-    prg, version, d->bitrate, resetenc));
+  {
+    char* settings = my_sprintf("ENCODERSETTINGS=%s %s: bitrate=%i, resetencoder=%i",
+      prg, version, d->bitrate, resetenc);
+    ope_comments_add_string(d->comments, settings);
+    free(settings);
+  }
 
   if (resetenc) {
     if (d->idx != 0) {
