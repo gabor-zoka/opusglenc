@@ -33,7 +33,7 @@ fi
 tar xf flac-$flac_commit.tar.gz
 cd     flac-$flac_commit
 ./autogen.sh
-./configure -prefix=$td --disable-shared --disable-doxygen-docs
+./configure -prefix=$td --disable-shared --disable-doxygen-docs --disable-examples --disable-thorough-tests
 make check && make install
 cd -
 
@@ -51,23 +51,17 @@ cd -
 
 
 
-# There were a few bugfixes I can sign off on. So use Jan 11, 2021.
-opus_commit=427d61131a1af5eed48d5428e723ab4602b56cc1
-
-if [[ ! -e libopusenc-$opus_commit.tar.gz ]]; then
-  curl -ROLJ https://github.com/xiph/libopusenc/archive/$opus_commit.tar.gz
+if [[ ! -e libopusenc ]]; then
+  # This has my patch on input sample rate.
+  git clone https://github.com/gabor-zoka/libopusenc
+  cd libopusenc
+else
+  cd libopusenc
+  git pull
 fi
 
-tar xf libopusenc-$opus_commit.tar.gz
-cd     libopusenc-$opus_commit
-
-# I hate the input sample rate concept as a idiotic decoder might do another
-# sample rate conversion back to the input rate, which would be pointless and
-# degrade the sound further. Hence we apply this patch.
-patch -p1 -i "$script_dir/input_sample_rate.patch"
-
 ./autogen.sh
-./configure -prefix=$td --disable-shared --disable-doc
+./configure -prefix=$td --disable-shared --disable-doc --disable-examples
 make check && make install
 cd -
 
@@ -88,4 +82,4 @@ readelf --program-headers opusglenc | grep -q '^Elf file type is EXEC'
 strip -s opusglenc
 upx      opusglenc
 
-rm -rf $td flac-$flac_commit opus-1.3.1 libopusenc-$opus_commit
+rm -rf $td flac-$flac_commit opus-1.3.1 libopusenc
