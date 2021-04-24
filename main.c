@@ -14,6 +14,7 @@
 #include <locale.h>
 #include <unistd.h>
 #include <libgen.h>
+#include <arpa/inet.h>
 
 #include <FLAC/metadata.h>
 #include <FLAC/stream_decoder.h>
@@ -41,6 +42,7 @@ typedef struct {
 
   unsigned         initialized;
   size_t           idx;
+  opus_int32       serialno;
   double           scale;
   double           prev_scale;
 } Data;
@@ -172,6 +174,10 @@ void initialize_enc(Data* const d) {
       fatal("ERROR: %s: %s while encoding\n", d->out_paths[d->idx], ope_strerror(err));
   }
 
+  err = ope_encoder_ctl(d->enc, OPE_SET_SERIALNO(d->serialno));
+  if (err != OPE_OK)
+    fatal("ERROR: %s: %s while setting serialno\n", d->out_paths[d->idx], ope_strerror(err));
+
   d->initialized = 1;
 }
 
@@ -258,6 +264,11 @@ meta_cb(const FLAC__StreamDecoder*  dec,
 
   if (meta->type == FLAC__METADATA_TYPE_STREAMINFO) {
     d->scale    = exp(-(meta->data.stream_info.bits_per_sample - 1.0) * M_LN2);
+    // To have a semi-random, but repeatable serialno so I can compare opus
+    // files w/o decoding.
+    memcpy(&(d->serialno), meta->data.stream_info.md5sum, sizeof(opus_int32));
+    // To come out in the same byte order:
+    d->serialno = ntohl(d->serialno);
   }
   else if (meta->type == FLAC__METADATA_TYPE_VORBIS_COMMENT) {
     FLAC__StreamMetadata_VorbisComment_Entry* entry     = meta->data.vorbis_comment.comments;
