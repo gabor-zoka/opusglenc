@@ -19,18 +19,6 @@ export LIBRARY_PATH=$td/lib
 
 
 
-if [[ ! -e libogg-1.3.4.tar.xz ]]; then
-  curl -ROLJ https://downloads.xiph.org/releases/ogg/libogg-1.3.4.tar.xz
-fi
-
-tar xf libogg-1.3.4.tar.xz
-cd     libogg-1.3.4
-cmake -H. -Bbuild -G Ninja -DCMAKE_INSTALL_PREFIX=$td
-cmake --build build --target install
-cd -
-
-
-
 if [[ ! -e flac-1.3.3.tar.xz ]]; then
   curl -ROLJ https://downloads.xiph.org/releases/flac/flac-1.3.3.tar.xz
 fi
@@ -77,7 +65,7 @@ cd -
 
 
 
-$CC "$script_dir/main.c" -Wall -lFLAC -lopusenc -lopus -logg -lm -I$td/include -I$td/include/opus -static -o opusglenc
+$CC "$script_dir/main.c" -Wall -lFLAC -lopusenc -lopus -lm -I$td/include -I$td/include/opus -static -o opusglenc
 
 # Checking that it is a static executable indeed.
 # ldd exits with error, so I need a jiggery pokery:
