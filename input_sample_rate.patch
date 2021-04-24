@@ -1,0 +1,12 @@
+diff -Naur libopusenc-0.2.1/src/opusenc.c libopusenc-0.2.1.new/src/opusenc.c
+--- libopusenc-0.2.1/src/opusenc.c	2018-10-06 05:29:13.000000000 +0100
++++ libopusenc-0.2.1.new/src/opusenc.c	2021-02-21 01:57:57.241131705 +0000
+@@ -407,7 +407,7 @@
+   enc->comment_padding = 512;
+   enc->header.channels=channels;
+   enc->header.channel_mapping=family;
+-  enc->header.input_sample_rate=rate;
++  enc->header.input_sample_rate=48000;
+   enc->header.gain=0;
+   if (family != -1) {
+     ret=opeint_encoder_surround_init(&enc->st, 48000, channels,
