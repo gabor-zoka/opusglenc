@@ -49,7 +49,8 @@ typedef struct {
 
 
 
-int exit_warning = 1;
+char version[]    = "1.3";
+int  exit_warning = 1;
 
 
 
@@ -496,6 +497,7 @@ ls_flac(char* const out_dir, char* const inp_dir) {
 
 void
 usage(const char* const prg) {
+  fprintf(stderr, "%s %s\n\n", prg, version);
   fprintf(stderr, "USAGE: %s [-h] [-w] [-b bitrate] output-dir input-dir\n\n", prg);
   fprintf(stderr, "Encodes all *.fla or *.flac FLAC files from input-dir into OPUS format.\n");
   fprintf(stderr, "The output goes into output-dir with same filename with *.opus extension.\n");
