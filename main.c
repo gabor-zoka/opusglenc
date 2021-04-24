@@ -47,7 +47,7 @@ typedef struct {
 
 
 
-int exit_warning = 0;
+int exit_warning = 1;
 
 
 
@@ -491,8 +491,8 @@ usage(const char* const prg) {
   fprintf(stderr, "The volume is scaled to -23 LUFS with REPLAYGAIN_ALBUM_GAIN if exists.\n");
   fprintf(stderr, "It uses GAPLESS encoding between tracks if scaling does not change.\n\n");
   fprintf(stderr, "  -h   This help.\n");
-  fprintf(stderr, "  -w   Fail even on warnings.\n");
-  fprintf(stderr, "  -b   Bitrate in bits/sec. Must be integer (default 160000).\n");
+  fprintf(stderr, "  -w   Do not exit on warnings.\n");
+  fprintf(stderr, "  -b   Bitrate in bits/sec. Must be integer (default 192000).\n");
   fprintf(stderr, "  -i   Each track independently encoded (i.e. not gapless).\n");
   fprintf(stderr, "       It is scaled to -23 LUFS with REPLAYGAIN_TRACK_GAIN if exists.\n");
 }
@@ -517,7 +517,7 @@ int main(int argc, char *argv[]) {
         break;
 
       case 'w':
-        exit_warning = 1;
+        exit_warning = 0;
         break;
 
       case 'b':
