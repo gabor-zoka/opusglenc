@@ -144,7 +144,7 @@ void initialize_enc(Data* const d) {
 
   int err;
 
-  // Start a new encoding (non-gapless) when 
+  // Start a new encoding (non-gapless) when
   // - -i option is set
   // - 1st track
   // - When the scaling changes (bitdepth or album gain changed).
@@ -245,7 +245,7 @@ write_cb(const FLAC__StreamDecoder* dec,
   if (err != OPE_OK)
     fatal("ERROR: %s: %s\n", d->out_paths[d->idx], ope_strerror(err));
 
-	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
+  return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
 
 
@@ -256,9 +256,9 @@ meta_cb(const FLAC__StreamDecoder*  dec,
         void*                       data) {
   Data* d = data;
 
-	if (meta->type == FLAC__METADATA_TYPE_STREAMINFO) {
+  if (meta->type == FLAC__METADATA_TYPE_STREAMINFO) {
     d->scale    = exp(-(meta->data.stream_info.bits_per_sample - 1.0) * M_LN2);
-	}
+  }
   else if (meta->type == FLAC__METADATA_TYPE_VORBIS_COMMENT) {
     FLAC__StreamMetadata_VorbisComment_Entry* entry     = meta->data.vorbis_comment.comments;
     FLAC__StreamMetadata_VorbisComment_Entry* entry_end = meta->data.vorbis_comment.comments +
@@ -284,7 +284,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
       else {
         if (!regexec(&album_gain_re, comment, 2, pmatch, 0))
           album_gain = read_gain(comment, pmatch[1], d);
-      
+
         if (!regexec(&track_gain_re, comment, 2, pmatch, 0))
           track_gain = read_gain(comment, pmatch[1], d);
       }
@@ -297,7 +297,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
     if (d->individual) {
       if (!isnan(track_gain)) {
         if (track_gain < limit) {
-          // track_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as 
+          // track_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as
           // target loudness.
           d->scale *= exp((track_gain - 5.0) / 20.0 * M_LN10);
         }
@@ -309,7 +309,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
     else {
       if (!isnan(album_gain)) {
         if (album_gain < limit) {
-          // album_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as 
+          // album_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as
           // target loudness.
           d->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
         }
@@ -329,7 +329,7 @@ error_cb(const FLAC__StreamDecoder*     dec,
          void*                          data) {
   Data* d = (Data*)data;
 
-	fprintf(stderr, "ERROR: %s: %s\n", d->inp_paths[d->idx],
+  fprintf(stderr, "ERROR: %s: %s\n", d->inp_paths[d->idx],
       FLAC__StreamDecoderErrorStatusString[status]);
 }
 
@@ -347,7 +347,7 @@ ls_flac(char* const out_dir, char* const inp_dir) {
   if (!S_ISDIR(st.st_mode))
     fatal("ERROR: %s: Not a directory\n", out_dir);
 
-  // Directory does not have to be readable. That is only needed for listing 
+  // Directory does not have to be readable. That is only needed for listing
   // the dir. We do not need to list out_dir.
   if (access(out_dir, W_OK)) {
     if (errno == EACCES)
@@ -539,9 +539,9 @@ int main(int argc, char *argv[]) {
       default:
         abort();
     }
-  
+
   if (argc - optind != 2) {
-	  if (argc - optind == 0)
+    if (argc - optind == 0)
       fprintf(stderr, "ERROR: Missing input and output directories\n");
     else if (argc - optind == 1)
       fprintf(stderr, "ERROR: Missing output directory\n");
@@ -562,23 +562,23 @@ int main(int argc, char *argv[]) {
     d->idx         = i;
 
     d->comments = ope_comments_create();
-	  FLAC__StreamDecoder* dec = FLAC__stream_decoder_new();
+    FLAC__StreamDecoder* dec = FLAC__stream_decoder_new();
     assert(dec != NULL);
 
     FLAC__stream_decoder_set_md5_checking(dec, true);
     FLAC__stream_decoder_set_metadata_respond(dec, FLAC__METADATA_TYPE_VORBIS_COMMENT);
 
-    FLAC__StreamDecoderInitStatus	init_status =
+    FLAC__StreamDecoderInitStatus  init_status =
       FLAC__stream_decoder_init_file(dec, d->inp_paths[i], write_cb, meta_cb, error_cb, d);
-	  if (init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK)
-		  fatal("ERROR: %s: %s\n", d->inp_paths[i],
+    if (init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK)
+      fatal("ERROR: %s: %s\n", d->inp_paths[i],
           FLAC__StreamDecoderInitStatusString[init_status]);
 
-	  if (!FLAC__stream_decoder_process_until_end_of_stream(dec))
+    if (!FLAC__stream_decoder_process_until_end_of_stream(dec))
       fatal("ERROR: %s: %s\n", d->inp_paths[i],
           FLAC__StreamDecoderStateString[FLAC__stream_decoder_get_state(dec)]);
 
-    // If the FLAC file is empty, the write_cb() has not been called so 
+    // If the FLAC file is empty, the write_cb() has not been called so
     // initialize_enc() has not been executed.
     if (!d->initialized)
       initialize_enc(d);
@@ -600,5 +600,5 @@ int main(int argc, char *argv[]) {
   free(d->enc_buffer);
   free(d);
 
-	return EXIT_SUCCESS;
+  return EXIT_SUCCESS;
 }
