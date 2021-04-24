@@ -4,7 +4,7 @@ set -e -u -o pipefail
 
 
 
-sudo pacman --noconfirm --needed -S cmake ninja git nasm musl
+sudo pacman --noconfirm --needed -S cmake ninja git nasm musl upx
 
 
 
@@ -92,4 +92,4 @@ readelf --program-headers opusglenc | grep -q '^Elf file type is EXEC'
 strip -s opusglenc
 upx      opusglenc
 
-rm -rf $td libogg-1.3.4 flac-1.3.3 opus-1.3.1 libopusenc-0.2.1
+rm -rf $td libogg-1.3.4 flac-1.3.3 opus-1.3.1 libopusenc-0.2.1 libopusenc-$commit
