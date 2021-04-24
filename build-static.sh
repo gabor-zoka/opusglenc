@@ -33,7 +33,7 @@ fi
 tar xf flac-$flac_commit.tar.gz
 cd     flac-$flac_commit
 ./autogen.sh
-./configure -prefix=$td --disable-shared --disable-doxygen-docs --disable-examples --disable-thorough-tests
+./configure -prefix=$td --disable-shared --disable-doxygen-docs --disable-examples #--disable-thorough-tests
 make check && make install
 cd -
 
@@ -90,4 +90,4 @@ readelf --program-headers opusglenc | grep -q '^Elf file type is EXEC'
 strip -s opusglenc
 upx      opusglenc
 
-rm -rf $td flac-$flac_commit opus-1.3.1 libopusenc
+rm -rf $td flac-$flac_commit
