@@ -49,7 +49,7 @@ typedef struct {
 
 
 
-char  version[]    = "1.3";
+char  version[]    = "1.4";
 int   exit_warning = 1;
 char* prg;
 
@@ -527,7 +527,7 @@ int main(int argc, char *argv[]) {
 
   prg = basename(argv[0]);
 
-  opus_int32 bitrate    = 160000;
+  opus_int32 bitrate    = 192000;
   int        individual = 0;
   int        c;
   char*      endp;

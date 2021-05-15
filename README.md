@@ -6,6 +6,8 @@ Build Instruction:
 
 Documentation:
 
+    opusglenc 1.4
+
     USAGE: opusglenc [-h] [-w] [-b bitrate] output-dir input-dir
     
     Encodes all *.fla or *.flac FLAC files from input-dir into OPUS format.
@@ -14,7 +16,7 @@ Documentation:
     It uses GAPLESS encoding between tracks if scaling does not change.
     
       -h   This help.
-      -w   Fail even on warnings.
-      -b   Bitrate in bits/sec. Must be integer (default 160000).
+      -w   Do not exit on warnings.
+      -b   Bitrate in bits/sec. Must be integer (default 192000).
       -i   Each track independently encoded (i.e. not gapless).
            It is scaled to -23 LUFS with REPLAYGAIN_TRACK_GAIN if exists.
