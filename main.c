@@ -49,7 +49,7 @@ typedef struct {
 
 
 
-char  version[]    = "1.4";
+char  version[]    = "1.5";
 int   exit_warning = 1;
 char* prg;
 
@@ -120,7 +120,8 @@ config_enc(OggOpusEnc* const enc, const Data* const d) {
          ope_encoder_ctl(enc, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC))                        == OPE_OK &&
          ope_encoder_ctl(enc, OPUS_SET_COMPLEXITY(10))                                   == OPE_OK &&
          ope_encoder_ctl(enc, OPUS_SET_PACKET_LOSS_PERC(0))                              == OPE_OK &&
-         ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, d->bits_per_sample)))) == OPE_OK);
+         ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, d->bits_per_sample)))) == OPE_OK &&
+         ope_encoder_ctl(enc, OPUS_SET_DTX(0)));
 
   // We cannot fail on bitrate if it is positive:
   //
@@ -506,7 +507,7 @@ ls_flac(char* const out_dir, char* const inp_dir) {
 
 void
 usage() {
-  fprintf(stderr, "%s %s\n\n", prg, version);
+  fprintf(stderr, "%s %s, %s\n\n", prg, version, opus_get_version_string());
   fprintf(stderr, "USAGE: %s [-h] [-w] [-b bitrate] output-dir input-dir\n\n", prg);
   fprintf(stderr, "Encodes all *.fla or *.flac FLAC files from input-dir into OPUS format.\n");
   fprintf(stderr, "The output goes into output-dir with same filename with *.opus extension.\n");
