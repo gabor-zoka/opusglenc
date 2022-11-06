@@ -121,7 +121,7 @@ config_enc(OggOpusEnc* const enc, const Data* const d) {
          ope_encoder_ctl(enc, OPUS_SET_COMPLEXITY(10))                                   == OPE_OK &&
          ope_encoder_ctl(enc, OPUS_SET_PACKET_LOSS_PERC(0))                              == OPE_OK &&
          ope_encoder_ctl(enc, OPUS_SET_LSB_DEPTH(IMAX(8, IMIN(24, d->bits_per_sample)))) == OPE_OK &&
-         ope_encoder_ctl(enc, OPUS_SET_DTX(0)));
+         ope_encoder_ctl(enc, OPUS_SET_DTX(0))                                           == OPE_OK);
 
   // We cannot fail on bitrate if it is positive:
   //
