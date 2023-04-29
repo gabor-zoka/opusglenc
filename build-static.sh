@@ -12,16 +12,23 @@ td="$(mktemp -d -t "$(basename "$0").XXXXXX")"
 script_dir="$(realpath -- "$(dirname "$0")")"
 
 export CC=musl-gcc
-export CFLAGS='  -march=x86-64 -mtune=generic -O2 -pipe -fno-plt'
-export CXXFLAGS='-march=x86-64 -mtune=generic -O2 -pipe -fno-plt'
+export CFLAGS='  -march=sandybridge -mtune=generic -O2 -pipe -fno-plt'
+export CXXFLAGS='-march=sandybridge -mtune=generic -O2 -pipe -fno-plt'
 export LDFLAGS=--static
 export LIBRARY_PATH=$td/lib
 
 
 
+echo '=== Building FLAC ============================================================'
+
 if [[ ! -e flac ]]; then
   git clone https://github.com/xiph/flac
+  cd flac
+  git checkout 1.4.2
+  cd -
 fi
+
+
 
 cd flac
 ./autogen.sh
@@ -31,10 +38,12 @@ cd -
 
 
 
+echo '=== Building Opus ============================================================'
+
 if [[ ! -e opus ]]; then
   git clone https://github.com/xiph/opus
   cd opus
-  git checkout v1.3.1
+  git checkout v1.4
   cd -
 fi
 
@@ -46,8 +55,13 @@ cd -
 
 
 
+echo '=== Building Libopusenc ======================================================'
+
+# Always use the latest.
 if [[ ! -e libopusenc ]]; then
   git clone https://github.com/xiph/libopusenc
+else
+  git pull
 fi
 
 cd libopusenc
@@ -57,6 +71,8 @@ make check && make install
 cd -
 
 
+
+echo '=== Building Opusglenc ======================================================='
 
 $CC "$script_dir/main.c" -Wall -lFLAC -lopusenc -lopus -lm -I$td/include -I$td/include/opus -static -o opusglenc
 
