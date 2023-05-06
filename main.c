@@ -49,7 +49,7 @@ typedef struct {
 
 
 
-char  version[]    = "1.5";
+char  version[]    = "1.6";
 int   exit_warning = 1;
 char* prg;
 
