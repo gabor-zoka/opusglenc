@@ -358,7 +358,7 @@ error_cb(const FLAC__StreamDecoder*     dec,
 
 
 Data*
-ls_flac(char* const out_dir, char* const inp_dir) {
+ls_flac(char* const inp_dir, char* const out_dir) {
   // Check the out_dir
 
   struct stat st;
@@ -508,14 +508,14 @@ ls_flac(char* const out_dir, char* const inp_dir) {
 void
 usage() {
   fprintf(stderr, "%s %s, %s\n\n", prg, version, opus_get_version_string());
-  fprintf(stderr, "USAGE: %s [-h] [-w] [-b bitrate] output-dir input-dir\n\n", prg);
+  fprintf(stderr, "USAGE: %s [-h] [-w] [-b bitrate] input-dir output-dir\n\n", prg);
   fprintf(stderr, "Encodes all *.fla or *.flac FLAC files from input-dir into OPUS format.\n");
   fprintf(stderr, "The output goes into output-dir with same filename with *.opus extension.\n");
   fprintf(stderr, "The volume is scaled to -23 LUFS with REPLAYGAIN_ALBUM_GAIN if exists.\n");
   fprintf(stderr, "It uses GAPLESS encoding between tracks if scaling does not change.\n\n");
   fprintf(stderr, "  -h   This help.\n");
   fprintf(stderr, "  -w   Do not exit on warnings.\n");
-  fprintf(stderr, "  -b   Bitrate in bits/sec. Must be integer (default 192000).\n");
+  fprintf(stderr, "  -b   Bitrate in bits/sec. Must be integer (default 160000).\n");
   fprintf(stderr, "  -i   Each track independently encoded (i.e. not gapless).\n");
   fprintf(stderr, "       It is scaled to -23 LUFS with REPLAYGAIN_TRACK_GAIN if exists.\n");
 }
@@ -528,7 +528,7 @@ int main(int argc, char *argv[]) {
 
   prg = basename(argv[0]);
 
-  opus_int32 bitrate    = 192000;
+  opus_int32 bitrate    = 160000;
   int        individual = 0;
   int        c;
   char*      endp;
@@ -568,7 +568,7 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "ERROR: Missing input and output directories\n");
     else if (argc - optind == 1)
       fprintf(stderr, "ERROR: Missing output directory\n");
-    else if (argc - optind > 2)
+    else if (argc - optind >  2)
       fprintf(stderr, "ERROR: Too many parameters\n");
 
     usage();
