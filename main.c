@@ -49,9 +49,10 @@ typedef struct {
 
 
 
-char  version[]    = "1.6";
-int   exit_warning = 1;
-char* prg;
+char   version[]    = "1.7";
+int    exit_warning = 1;
+double rg_offset;
+char*  prg;
 
 
 
@@ -210,12 +211,32 @@ read_gain(const char* const str,
   if (gain_str == endp)
     fatal("ERROR: %s: Parsing %s\n", d->inp_paths[d->idx], str);
 
-  if (isnan(gain))
-    fatal("ERROR: %s: %s\n", d->inp_paths[d->idx], str);
+  if (!isfinite(gain))
+    fatal("ERROR: %s: %s is not a finite number\n", d->inp_paths[d->idx], str);
 
   free(gain_str);
 
   return gain;
+}
+
+
+
+double
+read_env(const char* const env) {
+  char* const str = getenv(env);
+
+  if (str == NULL)
+    fatal("ERROR: %s env var is not set\n", env);
+
+  char* endp;
+  double val = strtod(str, &endp);
+  if (str == endp)
+    fatal("ERROR: Parsing %s env var\n", env);
+
+  if (!isfinite(val))
+    fatal("ERROR: %s env var is not a finite number\n", env);
+
+  return val;
 }
 
 
@@ -321,7 +342,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
         if (track_gain < limit) {
           // track_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as
           // target loudness.
-          d->scale *= exp((track_gain - 5.0) / 20.0 * M_LN10);
+          d->scale *= exp((track_gain - rg_offset) / 20.0 * M_LN10);
         }
         else
           warning("WARNING: %s: REPLAYGAIN_TRACK_GAIN >= %.1f hence not applied\n",
@@ -333,7 +354,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
         if (album_gain < limit) {
           // album_gain uses -18LUFS, but Opus (and me) wants to use -23 LUFS as
           // target loudness.
-          d->scale *= exp((album_gain - 5.0) / 20.0 * M_LN10);
+          d->scale *= exp((album_gain - rg_offset) / 20.0 * M_LN10);
         }
         else
           warning("WARNING: %s: REPLAYGAIN_ALBUM_GAIN >= %.1f hence not applied\n",
@@ -511,13 +532,14 @@ usage() {
   fprintf(stderr, "USAGE: %s [-h] [-w] [-b bitrate] input-dir output-dir\n\n", prg);
   fprintf(stderr, "Encodes all *.fla or *.flac FLAC files from input-dir into OPUS format.\n");
   fprintf(stderr, "The output goes into output-dir with same filename with *.opus extension.\n");
-  fprintf(stderr, "The volume is scaled to -23 LUFS with REPLAYGAIN_ALBUM_GAIN if exists.\n");
-  fprintf(stderr, "It uses GAPLESS encoding between tracks if scaling does not change.\n\n");
+  fprintf(stderr, "Applies (REPLAYGAIN_ALBUM_GAIN - offset) gain if exists, where\n");
+  fprintf(stderr, "offset obtained from EBUR128_RG_OFFSET env var, which must be set.\n");
+  fprintf(stderr, "It uses GAPLESS encoding between tracks if their gains match.\n\n");
   fprintf(stderr, "  -h   This help.\n");
   fprintf(stderr, "  -w   Do not exit on warnings.\n");
   fprintf(stderr, "  -b   Bitrate in bits/sec. Must be integer (default 160000).\n");
-  fprintf(stderr, "  -i   Each track independently encoded (i.e. not gapless).\n");
-  fprintf(stderr, "       It is scaled to -23 LUFS with REPLAYGAIN_TRACK_GAIN if exists.\n");
+  fprintf(stderr, "  -i   Each track independently encoded (i.e. not gapless), and\n");
+  fprintf(stderr, "       applies (REPLAYGAIN_TRACK_GAIN - offset) gain if exists.\n");
 }
 
 
@@ -574,6 +596,8 @@ int main(int argc, char *argv[]) {
     usage();
     return EXIT_FAILURE;
   }
+
+  rg_offset = read_env("EBUR128_RG_OFFSET");
 
   Data* d = ls_flac(argv[optind], argv[optind + 1]);
 
