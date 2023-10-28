@@ -31,7 +31,7 @@ typedef struct {
   unsigned         channels;
   unsigned         bits_per_sample;
   FLAC__uint64     total_samples;
-  OggOpusComments* comments;
+  OggOpusComments* opus_comments;
   OggOpusEnc*      enc;
   opus_int32       bitrate;
   int              individual;
@@ -160,7 +160,7 @@ void initialize_enc(Data* const d) {
   {
     char* settings = my_sprintf("ENCODERSETTINGS=%s %s: bitrate=%i, resetencoder=%i",
       prg, version, d->bitrate, resetenc);
-    ope_comments_add_string(d->comments, settings);
+    ope_comments_add_string(d->opus_comments, settings);
     free(settings);
   }
 
@@ -173,7 +173,7 @@ void initialize_enc(Data* const d) {
     if (d->channels > 2)
       fatal("ERROR: Only mono and stereo are supported\n");
 
-    d->enc = ope_encoder_create_file(d->out_paths[d->idx], d->comments,
+    d->enc = ope_encoder_create_file(d->out_paths[d->idx], d->opus_comments,
         d->sample_rate, d->channels, 0, &err);
     if (d->enc == NULL || err != OPE_OK)
       fatal("ERROR: %s: %s while initializing encoder\n", d->out_paths[d->idx], ope_strerror(err));
@@ -181,7 +181,7 @@ void initialize_enc(Data* const d) {
     config_enc(d->enc, d);
   }
   else {
-    err = ope_encoder_continue_new_file(d->enc, d->out_paths[d->idx], d->comments);
+    err = ope_encoder_continue_new_file(d->enc, d->out_paths[d->idx], d->opus_comments);
     if (err != OPE_OK)
       fatal("ERROR: %s: %s while encoding\n", d->out_paths[d->idx], ope_strerror(err));
   }
@@ -322,7 +322,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
 
       if (regexec(&replaygain_re, comment, 0, NULL, 0)) {
         // Not REPLAYGAIN_*
-        ope_comments_add_string(d->comments, comment);
+        ope_comments_add_string(d->opus_comments, comment);
       }
       else {
         if (!regexec(&album_gain_re, comment, 2, pmatch, 0))
@@ -480,7 +480,7 @@ ls_flac(char* const inp_dir, char* const out_dir) {
           d->channels        = m.data.stream_info.channels;
           d->bits_per_sample = m.data.stream_info.bits_per_sample;
           d->total_samples   = m.data.stream_info.total_samples;
-          d->comments        = NULL;
+          d->opus_comments   = NULL;
           d->enc             = NULL;
           d->bitrate         = OPUS_AUTO;
           d->individual      = 0;
@@ -608,7 +608,7 @@ int main(int argc, char *argv[]) {
     d->initialized = 0;
     d->idx         = i;
 
-    d->comments = ope_comments_create();
+    d->opus_comments = ope_comments_create();
     FLAC__StreamDecoder* dec = FLAC__stream_decoder_new();
     assert(dec != NULL);
 
@@ -633,7 +633,7 @@ int main(int argc, char *argv[]) {
     d->prev_scale = d->scale;
 
     FLAC__stream_decoder_delete(dec);
-    ope_comments_destroy(d->comments);
+    ope_comments_destroy(d->opus_comments);
 
     free(d->inp_paths[i]);
     free(d->out_paths[i]);
