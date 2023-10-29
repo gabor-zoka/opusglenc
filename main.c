@@ -319,7 +319,7 @@ meta_cb(const FLAC__StreamDecoder*  dec,
       meta->data.vorbis_comment.num_comments;
 
     // We will add one extra comment, hence +1
-    d->comments     = my_malloc(sizeof(char*) * meta->data.vorbis_comment.num_comments + 1);
+    d->comments     = my_malloc(sizeof(char*) * (meta->data.vorbis_comment.num_comments + 1));
     d->num_comments = 0;
 
     regex_t replaygain_re, album_gain_re, track_gain_re;
