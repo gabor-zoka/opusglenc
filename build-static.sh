@@ -24,7 +24,7 @@ echo '=== Building FLAC ========================================================
 if [[ ! -e flac ]]; then
   git clone https://github.com/xiph/flac
   cd flac
-  git checkout 1.4.2
+  git checkout 1.4.3
   cd -
 fi
 
@@ -32,7 +32,7 @@ fi
 
 cd flac
 ./autogen.sh
-./configure -prefix=$td --disable-shared --disable-doxygen-docs --disable-examples #--disable-thorough-tests
+./configure -prefix=$td --disable-shared --disable-doxygen-docs --disable-examples --disable-thorough-tests
 make check && make install
 cd -
 
