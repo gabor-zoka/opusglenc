@@ -32,7 +32,7 @@ typedef struct {
   unsigned         bits_per_sample;
   FLAC__uint64     total_samples;
   OggOpusComments* opus_comments;
-  const char**     comments;
+  char**           comments;
   size_t           num_comments;
   OggOpusEnc*      enc;
   opus_int32       bitrate;
@@ -159,21 +159,20 @@ void initialize_enc(Data* const d) {
   int resetenc = d->individual || d->idx == 0 ||
     fabs(d->scale - d->prev_scale) / fabs(d->scale) > 0.0001;
 
-  char* settings = my_sprintf("ENCODERSETTINGS=%s %s: bitrate=%i, resetencoder=%i",
+  d->comments[d->num_comments++] = my_sprintf("ENCODERSETTINGS=%s %s: bitrate=%i, resetencoder=%i",
     prg, version, d->bitrate, resetenc);
-  d->comments[d->num_comments++] = settings;
 
   // Sort comments.
 
   for (int i = 0; i != d->num_comments; ++i) {
     ope_comments_add_string(d->opus_comments, d->comments[i]);
+
+    free(d->comments[i]);
   }
 
   free(d->comments);
   d->comments     = NULL;
   d->num_comments = 0;
-
-  free(settings);
 
   if (resetenc) {
     if (d->idx != 0) {
@@ -337,7 +336,10 @@ meta_cb(const FLAC__StreamDecoder*  dec,
 
       if (regexec(&replaygain_re, comment, 0, NULL, 0)) {
         // Not REPLAYGAIN_*
-        d->comments[d->num_comments++] = comment;
+        d->comments[d->num_comments++] = strndup(comment, entry->length);
+  
+        if (errno == ENOMEM)
+          fatal("ERROR: Out of memory\n");
       }
       else {
         if (!regexec(&album_gain_re, comment, 2, pmatch, 0))
