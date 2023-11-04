@@ -51,7 +51,7 @@ typedef struct {
 
 
 
-char   version[]    = "1.7";
+char   version[]    = "1.8";
 int    exit_warning = 1;
 double rg_offset;
 char*  prg;
@@ -113,6 +113,32 @@ my_sprintf(const char* format, ...) {
 
 
 
+static int
+cmpstringp(const void *p1, const void *p2) {
+  const char* s1 = *(const char**)p1;
+  const char* s2 = *(const char**)p2;
+
+  char* e1 = strchr(s1, '='); if (e1 == NULL) fatal("ERROR: Invalid tag as = sign is missing: %s\n", s1);
+  char* e2 = strchr(s2, '='); if (e2 == NULL) fatal("ERROR: Invalid tag as = sign is missing: %s\n", s2);
+
+  *e1 = '\0';
+  *e2 = '\0';
+
+  int ret = strcoll(s1, s2);
+
+  *e1 = '=';
+  *e2 = '=';
+
+  if (ret == 0) {
+    return strcoll(e1 + 1, e2 + 1);
+  }
+  else {
+    return ret;
+  }
+}
+
+
+
 void
 config_enc(OggOpusEnc* const enc, const Data* const d) {
   assert(ope_encoder_ctl(enc, OPUS_SET_EXPERT_FRAME_DURATION(OPUS_FRAMESIZE_20_MS))      == OPE_OK &&
@@ -162,9 +188,9 @@ void initialize_enc(Data* const d) {
   d->comments[d->num_comments++] = my_sprintf("ENCODERSETTINGS=%s %s: bitrate=%i, resetencoder=%i",
     prg, version, d->bitrate, resetenc);
 
-  // Sort comments.
+  qsort(d->comments, d->num_comments, sizeof(char*), cmpstringp);
 
-  for (int i = 0; i != d->num_comments; ++i) {
+  for (size_t i = 0; i != d->num_comments; ++i) {
     ope_comments_add_string(d->opus_comments, d->comments[i]);
 
     free(d->comments[i]);
