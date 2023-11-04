@@ -51,7 +51,7 @@ typedef struct {
 
 
 
-char   version[]    = "1.8";
+char   version[]    = "2.0";
 int    exit_warning = 1;
 double rg_offset;
 char*  prg;
